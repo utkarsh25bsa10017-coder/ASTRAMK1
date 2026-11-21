@@ -786,68 +786,167 @@ def _intdes_from_l1(l1):
     return f"{1900 + yy if yy >= 57 else 2000 + yy}-{s[2:5]}"
 
 
-def _build_catalog_orbits():
-    provs, sats = [], {}
-    sets = [("active", 0), ("rocket-bodies", 1), ("debris", 2)]
-    for name, default_type in sets:
-        try:
-            d, p = orbit_set(name)
-            provs.append(p)
-        except SourceUnavailable:
+# ---------------------------------------------------------------------------
+# Catalogue in parts, each with a source chain tried ONE AT A TIME (never in parallel):
+# first source that returns enough objects wins; every attempt is reported to the UI.
+# ---------------------------------------------------------------------------
+import time as _time
+
+PART_TYPES = {"payloads": 0, "rocket-bodies": 1, "debris": 2}
+PART_MIN = {"payloads": 5000, "rocket-bodies": 1000, "debris": 3000}  # below this a source is "partial"
+
+
+def _src_celestrak(part):
+    q = {"payloads": "GROUP=active", "rocket-bodies": "NAME=R/B", "debris": "NAME=DEB"}[part]
+    key = {"payloads": "gp_active", "rocket-bodies": "gp_rocket-bodies", "debris": "gp_debris"}[part]
+    raw, prov = fetch_raw("celestrak", key, f"https://celestrak.org/NORAD/elements/gp.php?{q}&FORMAT=tle", ttl=2 * HOUR, timeout=20)
+    text = raw.decode("utf-8", "replace")
+    if "Invalid query" in text[:200] or "No GP data" in text[:200]:
+        raise SourceUnavailable(text[:100])
+    return _parse_tle(text), prov
+
+
+def _src_satnogs(part):
+    raw, prov = fetch_raw("satnogs", "satnogs_tle", "https://db.satnogs.org/api/tle/?format=json", ttl=2 * HOUR, timeout=25)
+    rows = []
+    for t in json.loads(raw):
+        l1, l2 = t.get("tle1", ""), t.get("tle2", "")
+        if not (l1.startswith("1 ") and l2.startswith("2 ")) or _tle_age_days(l1) > 14:
             continue
-        for norad, nm, l1, l2 in d["sats"]:
-            if norad not in sats:
-                sats[norad] = [norad, nm, l1, l2, default_type]
-    source = "CelesTrak"
-    if not sats:
-        # Last resort: SatNOGS DB (free, no key; ~3k objects, payload-heavy, from Space-Track)
-        raw, p = fetch_raw("satnogs", "satnogs_tle", "https://db.satnogs.org/api/tle/?format=json", ttl=2 * HOUR, timeout=40)
-        provs.append(p)
-        source = "SatNOGS DB (fallback: CelesTrak unreachable)"
-        for t in json.loads(raw):
-            l1, l2 = t.get("tle1", ""), t.get("tle2", "")
-            if not (l1.startswith("1 ") and l2.startswith("2 ")):
+        nm = (t.get("tle0") or "").removeprefix("0 ").strip()
+        kind = "debris" if " DEB" in nm else "rocket-bodies" if "R/B" in nm else "payloads"
+        if kind == part:
+            rows.append([_norad(l1[2:7]), nm, l1, l2])
+    return rows, prov
+
+
+def _src_tle_mirror(part, budget_s=22.0):
+    """tle.ivanstanojevic.me: 100 objects per page, so pages are fetched sequentially within a time budget."""
+    search = {"payloads": "", "rocket-bodies": "R/B", "debris": "DEB"}[part]
+    rows, seen, t0, page, prov = [], set(), _time.time(), 1, "live"
+    while _time.time() - t0 < budget_s and page <= 60:
+        url = f"https://tle.ivanstanojevic.me/api/tle/?page-size=100&page={page}" + (f"&search={urllib.parse.quote(search)}" if search else "")
+        raw, prov = fetch_raw("tle-backup", f"tlebak_{part}_{page}", url, ttl=2 * HOUR, timeout=12)
+        d = json.loads(raw)
+        members = d.get("member", [])
+        for m in members:
+            nm = m.get("name", "")
+            if part == "payloads" and (" DEB" in nm or "R/B" in nm):
                 continue
-            if _tle_age_days(l1) > 14:   # SatNOGS keeps some very old element sets
-                continue
-            nm = (t.get("tle0") or "").removeprefix("0 ").strip()
-            typ = 2 if " DEB" in nm else 1 if "R/B" in nm else 0
-            sats[_norad(l1[2:7])] = [_norad(l1[2:7]), nm, l1, l2, typ]
-    if not sats:
-        raise SourceUnavailable("no orbit data")
+            if m["satelliteId"] not in seen and m.get("line1", "").startswith("1 ") and _tle_age_days(m["line1"]) <= 30:
+                seen.add(m["satelliteId"])
+                rows.append([m["satelliteId"], nm, m["line1"], m["line2"]])
+        if not members or page * 100 >= d.get("totalItems", 0):
+            break
+        page += 1
+    return rows, prov
+
+
+def _src_snapshot(part):
+    snap = SNAP_DIR_PATH / f"orbits_part_{part}.json"
+    if not snap.exists():
+        raise SourceUnavailable("no snapshot")
+    d = json.loads(snap.read_text())
+    return d["sats"], "snapshot"
+
+
+from gateway import SNAP_DIR as SNAP_DIR_PATH  # noqa: E402
+
+PART_CHAIN = {
+    "payloads": [("CelesTrak", _src_celestrak), ("SatNOGS DB", _src_satnogs), ("TLE API mirror", _src_tle_mirror), ("Saved snapshot", _src_snapshot)],
+    "rocket-bodies": [("CelesTrak", _src_celestrak), ("TLE API mirror", _src_tle_mirror), ("Saved snapshot", _src_snapshot)],
+    "debris": [("CelesTrak", _src_celestrak), ("TLE API mirror", _src_tle_mirror), ("Saved snapshot", _src_snapshot)],
+}
+
+
+def _enrich(rows, default_type):
     try:
-        idx, p = satcat_index()
-        provs.append(p)
+        idx, _ = satcat_index()
     except SourceUnavailable:
         idx = {}
     decaying = set()
     try:
         d, _ = orbit_set("decaying")
-        decaying = {s[0] for s in d["sats"]}
-    except SourceUnavailable:
+        decaying = {x[0] for x in d["sats"]}
+    except Exception:
         pass
     cloud_keys = list(CLOUDS)
     out = []
-    for norad, nm, l1, l2, t in sats.values():
+    for row in rows:
+        norad, nm, l1, l2 = row[:4]
         info = idx.get(str(norad))
         owner = info[0] if info else ""
-        if info and info[1] in TYPE_CODE:
-            t = TYPE_CODE[info[1]]
+        t = TYPE_CODE.get(info[1], default_type) if info else default_type
         intdes = _intdes_from_l1(l1)
         cloud = cloud_keys.index(intdes) if intdes in CLOUDS and t == 2 else -1
-        flags = 0
-        if owner == "IND":
-            flags |= 1
-        if norad in decaying:
-            flags |= 2
-        if re.search(r"IRNSS|NVS-0", nm):
-            flags |= 4
-        status = info[2] if info else ""
-        out.append([norad, nm, l1, l2, t, owner, flags, cloud, status])
-    return {"generated": _iso(_now()), "source": source, "count": len(out), "clouds": [CLOUDS[k] for k in cloud_keys],
+        flags = (1 if owner == "IND" else 0) | (2 if norad in decaying else 0) | (4 if re.search(r"IRNSS|NVS-0", nm) else 0)
+        out.append([norad, nm, l1, l2, t, owner, flags, cloud, info[2] if info else ""])
+    return out
+
+
+def _build_part(part):
+    attempts, best, partials = [], None, []
+    for name, fn in PART_CHAIN[part]:
+        t0 = _time.time()
+        try:
+            rows, prov = fn(part)
+            ms = round((_time.time() - t0) * 1000)
+            ok = len(rows) >= PART_MIN[part] or name == "Saved snapshot"
+            attempts.append({"source": name, "status": "ok" if ok else "partial", "count": len(rows), "ms": ms})
+            if name != "Saved snapshot":
+                partials.append((name, rows))
+            if best is None or len(rows) > len(best[1]):
+                best = (name, rows, prov)
+            if ok and rows:
+                break
+        except Exception as e:
+            attempts.append({"source": name, "status": "failed", "error": str(e)[:120], "ms": round((_time.time() - t0) * 1000)})
+    if not best or not best[1]:
+        raise SourceUnavailable(f"all sources failed for {part}")
+    name, rows, prov = best
+    # If we ended on the snapshot, refresh it with any fresher elements a partial live source returned.
+    if name == "Saved snapshot":
+        live = [x for x in partials if x[1]]
+        if live:
+            merged = {r[0]: r for r in rows}
+            fresh_n = 0
+            for src_name, src_rows in live:
+                for r in src_rows:
+                    merged[r[0]] = r
+                    fresh_n += 1
+            rows = list(merged.values())
+            name = f"Saved snapshot + {', '.join(n for n, _ in live)} ({fresh_n:,} refreshed)"
+    return {"part": part, "source": name, "attempts": attempts, "generated": _iso(_now()), "count": len(rows),
+            "clouds": [CLOUDS[k] for k in CLOUDS], "fields": ["norad", "name", "l1", "l2", "type", "owner", "flags", "cloud", "status"],
+            "flagBits": {"india": 1, "decaying": 2, "navic": 4}, "types": ["PAY", "R/B", "DEB", "UNK"],
+            "sats": _enrich(rows, PART_TYPES[part])}, prov
+
+
+def catalog_part(part):
+    if part not in PART_CHAIN:
+        raise ValueError("part must be payloads, rocket-bodies or debris")
+    return cached_result(f"orbits_part_{part}", 2 * HOUR, lambda: _build_part(part))
+
+
+def _build_catalog_orbits():
+    """Legacy combined catalogue (parts fetched sequentially)."""
+    sats, provs, parts = {}, [], []
+    for part in PART_CHAIN:
+        try:
+            d, p = catalog_part(part)
+        except SourceUnavailable:
+            continue
+        provs.append(p)
+        parts.append({"part": part, "source": d["source"], "count": d["count"]})
+        for row in d["sats"]:
+            sats.setdefault(row[0], row)
+    if not sats:
+        raise SourceUnavailable("no orbit data")
+    return {"generated": _iso(_now()), "source": ", ".join(f"{x['part']}: {x['source']}" for x in parts), "parts": parts,
+            "count": len(sats), "clouds": [CLOUDS[k] for k in CLOUDS],
             "fields": ["norad", "name", "l1", "l2", "type", "owner", "flags", "cloud", "status"],
             "flagBits": {"india": 1, "decaying": 2, "navic": 4}, "types": ["PAY", "R/B", "DEB", "UNK"],
-            "sats": out}, worst(*provs)
+            "sats": list(sats.values())}, worst(*provs)
 
 
 def catalog_orbits():
@@ -866,7 +965,7 @@ def _build_conjunctions():
         idx = {}
     rdr = csv.DictReader(io.StringIO(raw.decode("utf-8", "replace")))
     now = _now()
-    rows, seen = [], set()
+    rows, seen, seen_pairs = [], set(), set()
     total = lt1 = lt5 = 0
     india_rows = []
     for r in rdr:
@@ -878,8 +977,15 @@ def _build_conjunctions():
         if k in seen:
             continue
         seen.add(k)
-        total += 1
         rng = _num(r["TCA_RANGE"]) or 99
+        vrel = _num(r["TCA_RELATIVE_SPEED"]) or 0
+        if vrel < 0.05:      # co-moving pair (formation flying / docked / own launch debris): not a collision risk
+            continue
+        pair = (a, b)
+        if pair in seen_pairs:   # keep only the closest approach per pair
+            continue
+        seen_pairs.add(pair)
+        total += 1
         lt1 += rng < 1
         lt5 += rng < 5
         ia, ib = idx.get(a), idx.get(b)
@@ -894,7 +1000,7 @@ def _build_conjunctions():
         if (rec["owner1"] == "IND" or rec["owner2"] == "IND") and len(india_rows) < 200:
             india_rows.append(rec)
     by_prob = sorted(rows, key=lambda x: -x["maxProb"])[:100]
-    return {"generated": _iso(now), "total": total, "under1km": lt1, "under5km": lt5,
+    return {"generated": _iso(now), "total": total, "under1km": lt1, "under5km": lt5, "note": "distinct pairs; co-moving pairs (< 50 m/s) excluded",
             "closest": rows[:200], "highestProb": by_prob, "india": india_rows}, prov
 
 

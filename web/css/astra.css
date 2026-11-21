@@ -324,6 +324,10 @@ input[type=search]:focus, select:focus { outline: 0; border-color: var(--sand); 
 .progress { height: 4px; background: repeating-linear-gradient(90deg, var(--rule-2) 0 1px, transparent 1px 8px); margin: 10px 0; }
 .progress i { display: block; height: 100%; width: 0; background: var(--sand); transition: width .2s; }
 
+.chain { list-style: none; margin: 0 0 6px; padding: 0; }
+.chain li { display: flex; justify-content: space-between; gap: 8px; padding: 7px 0; border-bottom: 1px solid var(--rule); font: 11px var(--mono); color: var(--bone-2); }
+.chain li b { color: var(--bone); font-weight: 500; }
+
 /* ---------- navic ---------- */
 .navic-center { display: grid; grid-template-rows: 1fr auto; min-width: 0; min-height: 0; }
 .dop-cards { display: grid; grid-template-columns: repeat(3, 1fr); background: var(--ink-2); border-top: 1px solid var(--rule-2); }

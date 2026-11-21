@@ -6,11 +6,12 @@ let recs = [];
 
 self.onmessage = (e) => {
   const msg = e.data;
-  if (msg.type === "load") {
-    recs = msg.tles.map(([l1, l2]) => {
+  if (msg.type === "load" || msg.type === "add") {
+    const parsed = msg.tles.map(([l1, l2]) => {
       try { const r = satellite.twoline2satrec(l1, l2); return r.error ? null : r; } catch { return null; }
     });
-    self.postMessage({ type: "loaded", count: recs.length, bad: recs.filter(r => !r).length });
+    recs = msg.type === "load" ? parsed : recs.concat(parsed);
+    self.postMessage({ type: "loaded", count: recs.length, bad: parsed.filter(r => !r).length });
   } else if (msg.type === "propagate") {
     const date = new Date(msg.time);
     const gmst = satellite.gstime(date);

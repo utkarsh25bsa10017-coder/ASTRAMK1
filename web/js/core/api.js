@@ -13,7 +13,15 @@ export async function api(path, { ttl = 60_000, force = false } = {}) {
   const p = (async () => {
     const res = await fetch(path, { headers: { Accept: "application/json" } });
     const prov = res.headers.get("X-Astra-Provenance") || "live";
-    const body = await res.json().catch(() => ({}));
+    let body;
+    try { body = await res.json(); }
+    catch { body = null; }
+    if (res.ok && (body === null || typeof body !== "object")) {
+      provenance[path] = "error";
+      listeners.forEach(f => f(path, "error"));
+      throw new Error("incomplete or unreadable response (network interrupted?)");
+    }
+    body = body || {};
     if (!res.ok) {
       provenance[path] = "error";
       listeners.forEach(f => f(path, "error"));

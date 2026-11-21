@@ -77,7 +77,8 @@ def route(path: str, qs: dict):
     if p == "/api/catalog/stats":
         return sources.catalog_stats()
     if p == "/api/catalog/orbits":
-        return sources.catalog_orbits()
+        part = _q(qs, "part")
+        return sources.catalog_part(part) if part else sources.catalog_orbits()
     if p.startswith("/api/orbits/"):
         return sources.orbit_set(p.rsplit("/", 1)[-1])
     if p == "/api/conjunctions":
@@ -147,8 +148,10 @@ class Handler(SimpleHTTPRequestHandler):
 
 def warm():
     """Prefetch slow sources in the background so the first page load is fast."""
-    jobs = [sources.alerts, hazard.earthquakes, sources.catalog_stats, sources.conjunctions, sources.spaceweather,
-            sources.catalog_orbits, lambda: sources.orbit_set("gnss"), lambda: sources.orbit_set("gps"),
+    jobs = [sources.alerts, hazard.earthquakes, sources.spaceweather, sources.catalog_stats,
+            lambda: sources.catalog_part("payloads"), lambda: sources.catalog_part("rocket-bodies"),
+            lambda: sources.catalog_part("debris"), sources.conjunctions,
+            lambda: sources.orbit_set("gnss"), lambda: sources.orbit_set("gps"),
             sources.cyclones, lambda: sources.flood_case("dana-2024")]
 
     def run(fn):
@@ -159,8 +162,8 @@ def warm():
         except Exception as e:
             print(f"[warm] {getattr(fn, '__name__', 'job')} failed: {e}")
 
-    with ThreadPoolExecutor(max_workers=4) as ex:
-        list(ex.map(run, jobs))
+    for job in jobs:          # one at a time: politer to providers, avoids rate limits
+        run(job)
 
 
 def main():

@@ -5,7 +5,7 @@ import { $, $$, esc, fmtNum, timeAgo, fmtUTC, toast, makeChart } from "../core/u
 
 const C = () => window.Cesium;
 let viewer, points, cat, worker, screenWorker, timer = null, active = false;
-let sats = [];            // rows from /api/catalog/orbits
+let sats = [];            // rows from /api/catalog/orbits?part=…
 let catOf = [];           // category per index
 const byNorad = new Map();
 let selected = -1, selEntity = null, conjEntity = null, focusSet = null;
@@ -105,37 +105,65 @@ function startTimer() {
 function stopTimer() { clearInterval(timer); timer = null; }
 
 // ---------------------------------------------------------------------------
+// The catalogue is loaded in three parts, ONE AFTER ANOTHER (never in parallel).
+// Each part has its own server-side source chain (CelesTrak → mirrors → saved snapshot).
+const PARTS = [["payloads", "Payloads"], ["rocket-bodies", "Rocket bodies"], ["debris", "Debris fragments"]];
+const partStatus = {};
+
+function renderChain() {
+  const el = $("#chain-status");
+  if (!el) return;
+  el.innerHTML = PARTS.map(([k, label]) => {
+    const st = partStatus[k];
+    if (!st) return `<li><span>${label}</span><span class="muted">waiting</span></li>`;
+    if (st.loading) return `<li><span>${label}</span><span class="muted">loading…</span></li>`;
+    if (st.error) return `<li><span>${label}</span><span style="color:var(--crimson)">unavailable</span></li>`;
+    const tried = (st.attempts || []).map(a => `${a.source} ${a.status === "ok" ? "✓" : a.status === "partial" ? `(${a.count})` : "✕"}`).join(" → ");
+    return `<li title="${esc(tried)}"><span>${label}</span><span><b>${fmtNum(st.count)}</b> · ${esc(st.source)}</span></li>`;
+  }).join("");
+}
+
 async function loadCatalog() {
   const status = $("#globe-status");
-  try {
-    status.textContent = "Downloading orbital catalogue…";
-    const d = await api("/api/catalog/orbits", { ttl: 3_600_000 });
-    sats = d.sats;
-    status.textContent = `Propagating ${fmtNum(sats.length)} orbits (SGP4)…`;
-    catOf = sats.map(categorise);
-    sats.forEach((s, i) => byNorad.set(s[0], i));
-    const colorCache = {};
-    for (const k in CATS) colorCache[k] = C().Color.fromCssColorString(CATS[k].color);
-    sats.forEach((s, i) => {
-      const c = CATS[catOf[i]];
-      points.add({ id: i, position: C().Cartesian3.ZERO, color: colorCache[catOf[i]], pixelSize: c.size, show: false });
-    });
-    worker = new Worker("js/workers/propagate.js");
-    worker.onmessage = (e) => {
-      if (e.data.type === "loaded") { if (status.textContent.startsWith("Propagating")) status.textContent = ""; startTimer(); }
-      if (e.data.type === "positions") applyPositions(e.data.buf);
-    };
-    worker.postMessage({ type: "load", tles: sats.map(s => [s[2], s[3]]) });
+  const colorCache = {};
+  for (const k in CATS) colorCache[k] = C().Color.fromCssColorString(CATS[k].color);
+  worker = new Worker("js/workers/propagate.js");
+  worker.onmessage = (e) => {
+    if (e.data.type === "loaded") startTimer();
+    if (e.data.type === "positions") applyPositions(e.data.buf);
+  };
+  for (const [part, label] of PARTS) {
+    partStatus[part] = { loading: true };
+    renderChain();
+    status.textContent = `Loading ${label.toLowerCase()}…`;
+    try {
+      const d = await api(`/api/catalog/orbits?part=${part}`, { ttl: 3_600_000 });
+      if (!d || !Array.isArray(d.sats)) throw new Error("malformed catalogue response");
+      const fresh = d.sats.filter(row => Array.isArray(row) && row.length >= 5 && !byNorad.has(row[0]));
+      const base = sats.length;
+      fresh.forEach((row, j) => {
+        const i = base + j;
+        sats.push(row);
+        catOf.push(categorise(row));
+        byNorad.set(row[0], i);
+        points.add({ id: i, position: C().Cartesian3.ZERO, color: colorCache[catOf[i]], pixelSize: CATS[catOf[i]].size, show: false });
+      });
+      worker.postMessage({ type: "add", tles: fresh.map(r => [r[2], r[3]]) });
+      partStatus[part] = { count: d.count, source: d.source, attempts: d.attempts };
+    } catch (e) {
+      partStatus[part] = { error: e.message };
+    }
+    renderChain();
     renderLayers();
     $("#orb-count").textContent = `${fmtNum(sats.length)} tracked`;
-    if (d.source && d.source !== "CelesTrak") {
-      status.textContent = `Showing ${fmtNum(sats.length)} objects from ${d.source}. The full catalogue (~30k incl. debris) loads automatically when CelesTrak responds.`;
-      setTimeout(() => { if (status.textContent.startsWith("Showing")) status.textContent = ""; }, 15000);
-    }
-    if (window.__astraPendingConj && active) show();
-  } catch (e) {
-    status.textContent = `Orbital catalogue unavailable (${e.message}). CelesTrak may be rate-limiting; cached data will be used when available.`;
   }
+  const failed = PARTS.filter(([k]) => partStatus[k].error).map(([, l]) => l.toLowerCase());
+  status.textContent = !sats.length
+    ? "Orbital catalogue unavailable from every source right now. Retrying in 60 s."
+    : failed.length ? `Loaded ${fmtNum(sats.length)} objects. Unavailable: ${failed.join(", ")}.` : "";
+  if (!sats.length) setTimeout(() => { if (!sats.length) loadCatalog(); }, 60000);
+  if (status.textContent.startsWith("Loaded")) setTimeout(() => { if (status.textContent.startsWith("Loaded")) status.textContent = ""; }, 12000);
+  if (window.__astraPendingConj && active) show();
 }
 
 function applyPositions(buf) {
@@ -265,8 +293,11 @@ function runScreen() {
   const start = simDate().getTime();
   const target = selected;
   const go = () => screenWorker.postMessage({ type: "screen", target, start, hours: 24, stepSec: 60, reportKm: 25 });
-  if (!screenWorker) {
+  if (!screenWorker || screenWorker._n !== sats.length) {   // (re)load after new catalogue parts arrive
+    screenWorker?.terminate();
     screenWorker = new Worker("js/workers/screen.js");
+    screenWorker._n = sats.length;
+    screenReady = false;
     screenWorker.postMessage({ type: "load", tles: sats.map(s => [s[2], s[3]]) });
   }
   screenWorker.onmessage = (e) => {
