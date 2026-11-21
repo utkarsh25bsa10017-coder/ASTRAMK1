@@ -1,14 +1,15 @@
 import { api } from "../core/api.js";
 import { attachSearch, goSafety } from "../core/search.js";
+import { mountEarthHero } from "../core/earth-hero.js";
 import { $, esc, fmtNum, timeAgo, fmtIST, makeChart, PAL, TYPE_ICON, SRC_LABEL } from "../core/util.js";
 
 const kpiDefs = [
-  { id: "india", l: "Indian alerts active", c: "var(--brass)" },
-  { id: "quakes", l: "Quakes in India · 7 days", c: "var(--sand)" },
-  { id: "objects", l: "Objects in orbit", c: "var(--bone)" },
-  { id: "debris", l: "Debris fragments", c: "var(--sand)" },
-  { id: "close", l: "Approaches < 1 km", c: "var(--crimson)" },
-  { id: "navic", l: "NavIC healthy", c: "var(--saffron)" },
+  { id: "india", l: "Official alerts in India", c: "var(--gold)" },
+  { id: "quakes", l: "Earthquakes in India, 7 days", c: "var(--saffron)" },
+  { id: "close", l: "Indian satellites with a close approach", c: "var(--red)" },
+  { id: "objects", l: "Objects tracked in orbit", c: "var(--text)" },
+  { id: "debris", l: "Debris fragments", c: "var(--saffron)" },
+  { id: "navic", l: "NavIC satellites healthy", c: "var(--saffron)" },
 ];
 const facts = {};
 
@@ -24,12 +25,14 @@ function renderLede() {
   const parts = [`As of <b>${fmtIST(new Date())}</b>:`];
   if (f.india != null) parts.push(`<b>${fmtNum(f.india)}</b> official alerts across India${f.severe ? `, <span class="hot">${fmtNum(f.severe)} severe or extreme</span>` : ""}.`);
   if (f.quakes != null) parts.push(`<b>${fmtNum(f.quakes)}</b> earthquakes recorded by NCS in the past week${f.maxQuake ? `, strongest <span class="hot">M${f.maxQuake.mag.toFixed(1)}</span> near ${esc(f.maxQuake.place.split(",").slice(-2).join(",").trim())}` : ""}.`);
-  if (f.objects != null) parts.push(`<b>${fmtNum(f.objects)}</b> objects in orbit, <b>${fmtNum(f.debris)}</b> of them debris.`);
+  if (f.indiaClose != null) parts.push(`<b>${fmtNum(f.indiaClose)}</b> Indian satellites have a close approach this week.`);
   if (f.navicOk != null) parts.push(`<b>${f.navicOk}</b> NavIC satellites at full health.`);
   $("#ov-lede").innerHTML = parts.join(" ");
 }
 
+let hero = null;
 export async function init() {
+  try { hero = mountEarthHero(document.getElementById("hero-stage")); } catch (e) { console.warn("hero", e); }
   $("#kpis").innerHTML = kpiDefs.map(k => `<div class="kpi" data-id="${k.id}" style="--kc:${k.c}"><div class="v">–</div><div class="l">${k.l}</div><div class="s"></div></div>`).join("");
   const s = attachSearch($("#ov-search"), $("#ov-suggest"), goSafety);
   $("#ov-quick").addEventListener("click", (e) => { const b = e.target.closest("[data-q]"); if (b) s.lookup(b.dataset.q); });
@@ -96,7 +99,9 @@ async function loadQuakes() {
 async function loadConj() {
   try {
     const c = await api("/api/conjunctions", { ttl: 600_000 });
-    setKpi("close", fmtNum(c.under1km), `${fmtNum(c.under5km)} under 5 km in 7 days`);
+    setKpi("close", fmtNum(c.indiaSatsUnder5km ?? 0), "approach under 5 km this week (SOCRATES, same-launch pairs removed)");
+    facts.indiaClose = c.indiaSatsUnder5km;
+    renderLede();
     $("#ov-conj").innerHTML = `<thead><tr><th>Objects</th><th class="num">Miss</th><th class="num">Speed</th><th class="num">When</th></tr></thead><tbody>` +
       c.closest.slice(0, 8).map(r => `<tr class="click" data-a="${r.id1}" data-b="${r.id2}" data-t="${r.tca}">
         <td class="mono">${esc(r.name1)} <span class="muted">×</span> ${esc(r.name2)}</td>
@@ -109,7 +114,7 @@ async function loadConj() {
       location.hash = "#orbital";
     };
   } catch (e) {
-    setKpi("close", "–", "CelesTrak unreachable right now");
+    setKpi("close", "…", "close-approach data still loading");
     $("#ov-conj").innerHTML = `<tbody><tr><td class="skeleton">Conjunction data will appear once CelesTrak responds (${esc(e.message)}).</td></tr></tbody>`;
   }
 }
@@ -150,4 +155,5 @@ async function loadSpaceWeather() {
   }
 }
 
-export function show() { renderLede(); }
+export function show() { renderLede(); hero?.start?.(); }
+export function hide() { hero?.stop?.(); }

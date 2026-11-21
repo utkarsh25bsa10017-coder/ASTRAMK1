@@ -417,12 +417,13 @@ def _score(terrain, river, rv, rain, seis):
 
 
 LABELS = {"riverine": "River discharge flood", "bank": "Bank overflow & runoff", "sediment": "Sediment & debris flow",
-          "flash": "Flash flood", "earthquake": "Earthquake"}
+          "flash": "Flash flood", "earthquake": "Long-term seismic exposure"}
+WATER = ["riverine", "bank", "sediment", "flash"]
 GRADES = [(85, "A", "Safe"), (70, "B", "Low risk"), (50, "C", "Caution"), (30, "D", "High risk"), (0, "E", "Danger")]
 
 
 def _combine(hz):
-    sc = sorted((v["score"] for v in hz.values()), reverse=True)
+    sc = sorted((hz[k]["score"] for k in WATER), reverse=True)   # seismic exposure is reported separately
     return min(100, sc[0] + 0.15 * sum(sc[1:3]))
 
 
@@ -469,12 +470,15 @@ def assess(lat, lon):
         safety = round(100 - max(c_now, 0.7 * c_design))
         grade, label = _grade(safety)
         s_now, s_design = round(100 - c_now), round(100 - c_design)
-        dominant = max(LABELS, key=lambda k: max(now[k]["score"], 0.7 * design[k]["score"]))
+        dominant = max(WATER, key=lambda k: max(now[k]["score"], 0.7 * design[k]["score"]))
+        seis_score = now["earthquake"]["score"]
         name, admin, country = res["place"] or (f"{lat}, {lon}", "", "")
         return {"lat": lat, "lon": lon, "place": {"name": name, "admin": admin, "country": country},
                 "generated": _iso(_now()), "safety": safety, "grade": grade, "label": label,
                 "safetyNow": s_now, "gradeNow": _grade(s_now)[0], "safetyDesign": s_design, "gradeDesign": _grade(s_design)[0],
-                "dominant": dominant, "hazards": hazards, "designEvent": {"rain24h": p10, "riverQ20": rv_design["peak"] if rv_design else None,
+                "dominant": dominant, "hazards": hazards,
+                "seismicExposure": {"score": seis_score, "level": _level(seis_score), "why": now["earthquake"]["why"]},
+                "disclaimer": "Screening estimate from public data. Not an official hazard assessment; follow IMD, CWC, NDMA and state advisories.", "designEvent": {"rain24h": p10, "riverQ20": rv_design["peak"] if rv_design else None,
                                                                           "rain": clim},
                 "terrain": terrain, "river": river, "weather": wx, "seismic": seis, "errors": errors,
                 "advice": _advice(now, design), "method": METHOD}, worst(*provs)
@@ -516,5 +520,5 @@ METHOD = {
         "earthquake": "Long-term seismicity load from historical quakes near the site.",
     },
     "scenarios": "Every hazard is scored twice: for the next 72 h (live forecast) and for a design monsoon event (ERA5 1995–2024 10-year 24 h rainfall, GloFAS 20-year river flood, 75% soil saturation).",
-    "rating": "Combined = highest hazard + 0.15 × next two. Safety = 100 − max(combined now, 0.7 × combined design). A ≥ 85, B ≥ 70, C ≥ 50, D ≥ 30, E below.",
+    "rating": "The A–E rating covers the four water hazards only: combined = highest + 0.15 × next two; safety = 100 − max(combined now, 0.7 × combined design). A ≥ 85, B ≥ 70, C ≥ 50, D ≥ 30, E below. Long-term seismic exposure is shown separately because it does not change day to day.",
 }

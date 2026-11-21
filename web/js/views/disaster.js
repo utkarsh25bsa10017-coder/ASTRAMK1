@@ -186,14 +186,16 @@ async function selectAlert(a, fly) {
     </dl>
     ${a.description && a.description !== a.title ? `<div class="desc">${esc(a.description)}</div>` : ""}
     ${a.instruction ? `<div class="desc"><b>Advice:</b> ${esc(a.instruction)}</div>` : ""}
-    <div style="display:flex;gap:6px;margin:10px 0">
-      <button class="btn" id="btn-safety">Full safety check →</button>
-      <button class="btn warn" id="btn-bcast">NavIC broadcast</button>
+    <div style="display:flex;gap:6px;margin:10px 0;flex-wrap:wrap">
+      <button class="btn" id="btn-fleet">Which satellites can help? →</button>
+      <button class="btn ghost" id="btn-safety">Safety check</button>
+      <button class="btn ghost" id="btn-bcast">NavIC broadcast</button>
       ${a.url ? `<a class="btn ghost" href="${esc(a.url)}" target="_blank" rel="noopener">Source ↗</a>` : ""}
     </div>
     <div id="wx-block"><p class="muted small">Loading local conditions…</p></div>`;
   $("#btn-bcast").onclick = () => { window.__astraBroadcast = a; emit("broadcast", a); location.hash = "#navic"; };
   $("#btn-safety").onclick = () => goSafety({ lat: a.lat, lon: a.lon, name: a.area || "" });
+  $("#btn-fleet").onclick = () => { location.hash = `#fleet?lat=${a.lat.toFixed(4)}&lon=${a.lon.toFixed(4)}&name=${encodeURIComponent(a.area || a.title.slice(0, 60))}&alert=${encodeURIComponent(a.id)}`; };
   renderWeather(a.lat, a.lon, $("#wx-block"));
 }
 

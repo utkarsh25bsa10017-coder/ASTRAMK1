@@ -1,0 +1,1 @@
+Earth day/night textures: Solar System Scope (https://www.solarsystemscope.com/textures/), CC BY 4.0, based on NASA imagery. Obtained via the three.js examples repository.

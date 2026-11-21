@@ -3,7 +3,7 @@ import { attachSearch, goSafety } from "../core/search.js";
 import { $, esc, fmtNum, fmtIST, timeAgo, toast, makeChart, PAL, riskColor, gradeColor } from "../core/util.js";
 
 let map = null, current = null, search;
-const ORDER = ["riverine", "bank", "sediment", "flash", "earthquake"];
+const ORDER = ["riverine", "bank", "sediment", "flash"];   // water hazards: these make the rating
 
 export function init() {
   search = attachSearch($("#sc-search"), $("#sc-suggest"), goSafety);
@@ -64,8 +64,8 @@ function dial(safety, grade) {
     <line x1="${cx - r - 8}" y1="${cy}" x2="${cx + r + 8}" y2="${cy}" stroke="${PAL.rule}"/>
     <line x1="${cx}" y1="${cy}" x2="${nx.toFixed(1)}" y2="${ny.toFixed(1)}" stroke="${col}" stroke-width="2.6" stroke-linecap="round"/>
     <circle cx="${cx}" cy="${cy}" r="5" fill="${PAL.bone}"/>
-    <text x="${cx}" y="${cy + 52}" fill="${PAL.bone}" font-size="50" text-anchor="middle" font-family="Instrument Serif, serif">${safety}</text>
-    <text x="${cx}" y="${cy + 68}" fill="${PAL.bone3}" font-size="9" letter-spacing="2" text-anchor="middle">SAFETY / 100</text>
+    <text x="${cx}" y="${cy + 50}" fill="${PAL.bone}" font-size="44" font-weight="600" text-anchor="middle" font-family="JetBrains Mono, monospace" letter-spacing="-2">${safety}</text>
+    <text x="${cx}" y="${cy + 68}" fill="${PAL.bone3}" font-size="10" text-anchor="middle" font-family="Archivo, sans-serif">flood safety / 100</text>
   </svg>`;
 }
 
@@ -92,14 +92,13 @@ function render(d, nameHint) {
   const domNow = dom.now.score, domDesign = dom.design.score;
   const summary = d.safety >= 85
     ? `No hazard stands out, either over the next 72 hours or in a heavy-monsoon event.`
-    : d.dominant === "earthquake"
-      ? `The main concern is <b>earthquake</b>: a ${LEVEL(domNow).toLowerCase()} long-term seismic hazard (${domNow}/100). Weather-driven hazards are lower.`
-      : `The main concern is <b>${dom.label.toLowerCase()}</b>: ${LEVEL(domNow).toLowerCase()} now (${domNow}/100) and ${LEVEL(domDesign).toLowerCase()} in a 1-in-10-year monsoon storm (${domDesign}/100).`;
+    : `The main concern is <b>${dom.label.toLowerCase()}</b>: ${LEVEL(domNow).toLowerCase()} now (${domNow}/100) and ${LEVEL(domDesign).toLowerCase()} in a 1-in-10-year monsoon storm (${domDesign}/100).`;
 
   out.innerHTML = `
     <div class="place-h">
       <div><p class="kicker" style="margin:0 0 10px">Safety check · ${d.lat.toFixed(3)}°N, ${d.lon.toFixed(3)}°E</p><h2>${esc(place)}</h2></div>
-      <div class="meta">${esc([d.place.admin, d.place.country].filter(Boolean).join(" · "))}<br>Elevation ${fmtNum(t.elevation)} m · assessed ${fmtIST(d.generated)}</div>
+      <div class="meta">${esc([d.place.admin, d.place.country].filter(Boolean).join(" · "))}<br>Elevation ${fmtNum(t.elevation)} m · assessed ${fmtIST(d.generated)}<br>
+        <a class="btn small" style="margin-top:8px" href="#fleet?lat=${d.lat}&lon=${d.lon}&name=${encodeURIComponent(place)}">Which satellites can help here? →</a></div>
     </div>
     <div class="safety-wrap">
       <div>
@@ -108,24 +107,30 @@ function render(d, nameHint) {
           <div class="verdict-text">
             <div class="grade-line" style="color:${gradeColor(d.grade)}">${d.grade} · <em>${esc(d.label)}</em></div>
             <p>${summary}</p>
+            <p class="disclaimer">${esc(d.disclaimer || "Screening estimate from public data. Not an official hazard assessment.")}</p>
             <div class="sub-ratings">
-              <div><b style="color:${gradeColor(d.gradeNow)}">${d.safetyNow}<span style="font-size:15px;color:var(--bone-3)"> ${d.gradeNow}</span></b><span>Next 72 hours</span></div>
-              <div><b style="color:${gradeColor(d.gradeDesign)}">${d.safetyDesign}<span style="font-size:15px;color:var(--bone-3)"> ${d.gradeDesign}</span></b><span>1-in-10-yr monsoon event</span></div>
+              <div><b style="color:${gradeColor(d.gradeNow)}">${d.safetyNow}<span style="font-size:14px;color:var(--text-3)"> ${d.gradeNow}</span></b><span>Next 72 hours</span></div>
+              <div><b style="color:${gradeColor(d.gradeDesign)}">${d.safetyDesign}<span style="font-size:14px;color:var(--text-3)"> ${d.gradeDesign}</span></b><span>Heavy-monsoon storm (1 in 10 yr)</span></div>
             </div>
           </div>
         </div>
-        <h3 style="margin-top:34px">Hazard scales · 0 to 100</h3>
+        <h3 style="margin-top:28px">Flood hazards, 0 to 100 (these make the rating)</h3>
         <div class="hz-legend"><span><i></i>now · next 72 h (live forecast)</span><span><i class="d"></i>design event · ${fmtNum(d.designEvent.rain24h)} mm in 24 h, 20-yr river flood</span></div>
         ${ORDER.map(k => {
           const h = d.hazards[k];
           const peak = Math.max(h.now.score, h.design.score);
           return `<div class="hz">
-            <div class="hz-top"><h4>${esc(h.label)}</h4><span class="lv" style="color:${riskColor(peak)}">${k === "earthquake" ? LEVEL(h.now.score) + " · long-term" : `${LEVEL(h.now.score)} now · ${LEVEL(h.design.score)} in monsoon`}</span></div>
-            ${scale(h.now.score, h.design.score, k === "earthquake")}
+            <div class="hz-top"><h4>${esc(h.label)}</h4><span class="lv" style="color:${riskColor(peak)}">${LEVEL(h.now.score)} now · ${LEVEL(h.design.score)} in a monsoon storm</span></div>
+            ${scale(h.now.score, h.design.score, false)}
             <p><b>Now:</b> ${esc(h.now.why)}</p>
-            ${k !== "earthquake" ? `<p><b>Monsoon event:</b> ${esc(h.design.why)}</p>` : ""}
+            <p><b>Monsoon event:</b> ${esc(h.design.why)}</p>
           </div>`;
         }).join("")}
+        ${d.seismicExposure ? `<div class="seismic-box">
+          <div class="hz-top"><h4>Long-term seismic exposure</h4><span class="lv" style="color:${riskColor(d.seismicExposure.score)}">${LEVEL(d.seismicExposure.score)}</span></div>
+          ${scale(d.seismicExposure.score, 0, true)}
+          <p class="note" style="margin-top:2px">${esc(d.seismicExposure.why)} This does not change day to day, so it is kept out of the rating above.</p>
+        </div>` : ""}
         <h3 style="margin-top:30px">What to do</h3>
         <ol class="advice">${d.advice.map(a => `<li><span>${esc(a)}</span></li>`).join("")}</ol>
         <details class="method"><summary>How this rating is made</summary>

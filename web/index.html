@@ -3,11 +3,11 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>ASTRA · Seen from orbit, read on the ground</title>
+  <title>ASTRA · See it from orbit, act on the ground</title>
   <meta name="description" content="ASTRA: location safety ratings, live disaster and earthquake alerts, radar flood mapping, space-debris safety and NavIC emergency messaging, built on free satellite data.">
   <meta name="theme-color" content="#0b0a08">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' fill='%230b0a08'/><path d='M4 24 A12 12 0 0 1 28 24' fill='none' stroke='%23c9a34e' stroke-width='2'/><path d='M16 24 L22 11' stroke='%23e2603a' stroke-width='2.4'/><circle cx='16' cy='24' r='2.2' fill='%23ede6d8'/></svg>">
-  <link rel="preload" href="vendor/fonts/InstrumentSerif-normal-400-latin.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="vendor/fonts/Archivo-var-latin.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="vendor/leaflet/leaflet.css">
   <link rel="stylesheet" href="vendor/cesium/Widgets/widgets.css">
   <link rel="stylesheet" href="css/astra.css">
@@ -29,17 +29,19 @@
         <circle cx="20" cy="25" r="2.4" fill="var(--bone)"/>
       </svg>
       <span>Astra</span>
-      <small>Space · Ground · Signal</small>
+      <small>Disaster · Orbit · NavIC</small>
     </a>
     <nav class="tabs" role="tablist">
       <a href="#overview" data-view="overview" role="tab"><i>01</i>Briefing</a>
       <a href="#safety" data-view="safety" role="tab"><i>02</i>Safety check</a>
       <a href="#disaster" data-view="disaster" role="tab"><i>03</i>Disaster watch</a>
-      <a href="#orbital" data-view="orbital" role="tab"><i>04</i>Orbital safety</a>
+      <a href="#fleet" data-view="fleet" role="tab"><i>04</i>Fleet readiness</a>
+      <a href="#orbital" data-view="orbital" role="tab"><i>05</i>Orbital safety</a>
       <a href="#navic" data-view="navic" role="tab"><i>05</i>NavIC link</a>
       <a href="#gateway" data-view="gateway" role="tab"><i>06</i>Sources</a>
     </nav>
     <div class="topbar-right">
+      <button class="tour-btn" id="tour-btn" title="One-click walkthrough: Cyclone Dana">▶ Guided demo</button>
       <span id="feed-pill" class="pill" title="Data feed status">connecting</span>
       <span id="utc-clock" class="clock">--:--:-- IST</span>
     </div>
@@ -48,26 +50,29 @@
   <main>
     <!-- ============ 01 BRIEFING ============ -->
     <section id="view-overview" class="view" data-view="overview">
-      <div class="page">
-        <section class="hero">
-          <p class="kicker">ASTRA 2026 · VIT Bhopal × Club Anterix · Team T22 · Domains 03 / 04 / 06</p>
-          <h1>Seen from orbit,<br>read on the ground.<br><em>Before the water rises.</em></h1>
+      <div class="hero-stage" id="hero-stage">
+        <div class="hero-copy">
+          <p class="eyebrow"><span class="livery"><i></i><i></i></span>ASTRA 2026 · Team T22 Astro World · VIT Bhopal × Club ANTERiX</p>
+          <h1>See it from orbit.<br><em>Act on the ground.</em></h1>
           <p class="lede" id="ov-lede">Reading today's feeds…</p>
-          <div class="hero-actions" style="display:block">
+          <div class="hero-actions">
             <form class="searchbar" id="ov-search" autocomplete="off" role="search">
-              <input type="search" name="q" placeholder="How safe is… Kedarnath, Guwahati, your village" aria-label="Search a place in India">
-              <button type="submit">Assess →</button>
+              <input type="search" name="q" placeholder="How safe is a place? Try Kedarnath, Guwahati, your town" aria-label="Search a place in India">
+              <button type="submit">Check safety</button>
               <ul class="suggest" id="ov-suggest"></ul>
             </form>
             <div class="quick" id="ov-quick"><span>Try</span>
               <button data-q="Kedarnath">Kedarnath</button><button data-q="Guwahati">Guwahati</button><button data-q="Kendrapara">Kendrapara</button><button data-q="Wayanad">Wayanad</button><button data-q="Mumbai">Mumbai</button>
             </div>
           </div>
-          <div class="kpis" id="kpis"></div>
-        </section>
+        </div>
+        <div class="hero-caption">Dawn over the Indian Ocean<br>rendered live in your browser</div>
+      </div>
+      <div class="page" style="padding-top:0">
+        <section style="padding-top:0"><div class="kpis" id="kpis"></div></section>
 
         <section>
-          <div class="sec-head"><span class="idx">01 · On the ground</span><div><h2>What needs attention now</h2><p>Official Indian alerts from IMD, CWC and state disaster authorities via NDMA SACHET, with earthquakes from the National Center for Seismology.</p></div></div>
+          <div class="sec-head"><span class="idx">01</span><div><h2>What needs attention now</h2><p>Official Indian alerts from IMD, CWC and state disaster authorities via NDMA SACHET, with earthquakes from the National Center for Seismology.</p></div></div>
           <div class="grid-2">
             <div class="card">
               <div class="card-h"><h2>Highest-priority alerts</h2><a href="#disaster" class="link">Disaster watch →</a></div>
@@ -81,7 +86,7 @@
         </section>
 
         <section>
-          <div class="sec-head"><span class="idx">02 · In orbit</span><div><h2>The satellites we depend on</h2><p>Close approaches between catalogued objects, the health of India's NavIC constellation, and the space weather that drags orbits down.</p></div></div>
+          <div class="sec-head"><span class="idx">02</span><div><h2>The satellites we depend on</h2><p>Close approaches between catalogued objects, the health of India's NavIC constellation, and the space weather that drags orbits down.</p></div></div>
           <div class="grid-2">
             <div class="card">
               <div class="card-h"><h2>Closest predicted approaches</h2><a href="#orbital" class="link">Orbital safety →</a></div>
@@ -98,14 +103,39 @@
         </section>
 
         <section>
-          <div class="sec-head"><span class="idx">03 · Method</span><div><h2>Detect, assess, protect, reach.</h2><p>Four steps from a satellite observation to a message on a phone with no network.</p></div></div>
+          <div class="sec-head"><span class="idx">03</span><div><h2>One chain, three domains</h2><p>From a disaster alert, to the Indian satellites that can help, to whether those satellites are safe, to a message on a phone with no network.</p></div></div>
           <ol class="flow">
             <li><span><b>Detect.</b> SACHET, NCS, GDACS, USGS and NASA EONET feeds arrive in Disaster Watch within minutes of issue.</span></li>
             <li><span><b>Assess.</b> The Safety Check combines terrain, 40 years of river discharge, rainfall and seismic history into a rating for any place; Sentinel-1 radar maps flooding through cloud.</span></li>
-            <li><span><b>Protect.</b> Orbital Safety screens the satellites disaster teams rely on against 30,000 tracked objects.</span></li>
+            <li><span><b>Protect.</b> Fleet readiness lists the Indian satellites passing over the disaster in the next 24 hours and flags any with a close approach; Orbital Safety screens them against 28,000 tracked objects.</span></li>
             <li><span><b>Reach.</b> NavIC Link packs an alert into a short satellite message for receivers where towers are down.</span></li>
           </ol>
         </section>
+
+        <section>
+          <div class="sec-head"><span class="idx">04</span><div><h2>What is real, what is illustrative</h2><p>So judges and users know exactly how far to trust each number.</p></div></div>
+          <div class="limits">
+            <div style="--lc:var(--mint)"><b>Real, live data</b><p>Alerts (NDMA SACHET, NCS, GDACS, USGS, NASA), river discharge (GloFAS), rain forecasts, terrain (Copernicus DEM), satellite orbits (CelesTrak), close approaches (SOCRATES), Sentinel-1 radar.</p></div>
+            <div style="--lc:var(--gold)"><b>Screening estimates</b><p>Public orbit data is accurate to about 1 km, so close approaches are an early-warning screen, not a collision call. Collision chances are illustrative. The safety rating is not an official hazard assessment.</p></div>
+            <div style="--lc:var(--red)"><b>Illustrative</b><p>The NavIC emergency-message frame is our own demonstration design, not the official NavIC format. Satellite status comes from the public catalogue, not official ISRO status.</p></div>
+          </div>
+        </section>
+      </div>
+    </section>
+
+    <!-- ============ FLEET READINESS ============ -->
+    <section id="view-fleet" class="view" data-view="fleet">
+      <div class="page">
+        <section class="hero" style="padding-bottom:20px">
+          <p class="kicker signal">Fleet readiness</p>
+          <h1>Who can help here,<br><em>and are they safe?</em></h1>
+          <p class="lede">Pick a live alert or any place. ASTRA lists the Indian satellites that pass over it in the next 24 hours, checks each against this week's close approaches, and reports NavIC positioning quality on the ground.</p>
+          <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:18px;max-width:900px">
+            <select id="fl-alert" aria-label="Choose an alert" style="flex:1;min-width:260px"><option>Loading alerts…</option></select>
+            <button class="btn" id="fl-go">Check fleet</button>
+          </div>
+        </section>
+        <section id="fl-result" style="border-top:0;padding-top:0"></section>
       </div>
     </section>
 
@@ -113,8 +143,9 @@
     <section id="view-safety" class="view" data-view="safety">
       <div class="page">
         <section class="hero" style="padding-bottom:30px">
-          <p class="kicker signal">02 · Safety check</p>
-          <h1>How safe is this place,<br><em>today and in a bad monsoon?</em></h1>
+          <p class="kicker signal">Safety check</p>
+          <h1>How safe is<br><em>this place?</em></h1>
+          <p class="lede" style="margin-bottom:22px">Flood hazards for the next 72 hours and for a heavy-monsoon storm, plus long-term earthquake exposure. A screening estimate from public data, not an official assessment.</p>
           <form class="searchbar" id="sc-search" autocomplete="off" role="search">
             <input type="search" name="q" placeholder="Search a town, district or lat, lon" aria-label="Search a place">
             <button type="submit">Assess →</button>
@@ -122,7 +153,7 @@
           </form>
           <div class="quick" id="sc-quick"><span>Try</span>
             <button data-q="Kedarnath">Kedarnath</button><button data-q="Guwahati">Guwahati</button><button data-q="Kendrapara">Kendrapara</button><button data-q="Wayanad">Wayanad</button><button data-q="Patna">Patna</button><button data-q="Bengaluru">Bengaluru</button>
-            <button data-here="1">⌖ My location</button>
+            <button data-here="1">Use my location</button>
           </div>
         </section>
         <section id="sc-result" style="border-top:0;padding-top:0">
@@ -265,13 +296,14 @@
     <section id="view-gateway" class="view" data-view="gateway">
       <div class="page">
         <section class="hero" style="padding-bottom:30px">
-          <p class="kicker signal">06 · Sources</p>
-          <h1>Every number is public.<br><em>Every source is free.</em></h1>
+          <p class="kicker signal">Sources</p>
+          <h1>Every number<br><em>is public.</em></h1>
           <p class="lede">The ASTRA gateway caches each feed, respects provider rate limits, and falls back to the last good copy when a source goes down, so the dashboard keeps working on a bad network.</p>
         </section>
         <section style="border-top:0;padding-top:0">
           <table class="table gateway" id="gw-table"><tbody><tr><td class="skeleton">Loading…</td></tr></tbody></table>
           <p class="note">Provenance: <span class="prov live">live</span> fetched now · <span class="prov cache">cache</span> within refresh interval · <span class="prov stale">stale</span> source down, last good copy · <span class="prov snapshot">snapshot</span> offline copy.</p>
+          <p class="note">Hero Earth textures: Solar System Scope (CC BY 4.0), based on NASA imagery. Fonts: Archivo, JetBrains Mono (SIL Open Font License). Maps: Esri, OpenStreetMap contributors, NASA GIBS, Bhuvan (NRSC), VEDAS (SAC).</p>
         </section>
       </div>
     </section>

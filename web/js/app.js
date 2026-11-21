@@ -7,6 +7,7 @@ const modules = {
   overview: () => import("./views/overview.js"),
   safety: () => import("./views/safety.js"),
   disaster: () => import("./views/disaster.js"),
+  fleet: () => import("./views/fleet.js"),
   orbital: () => import("./views/orbital.js"),
   navic: () => import("./views/navic.js"),
   gateway: () => import("./views/gateway.js"),
@@ -38,6 +39,9 @@ async function show(name, params = {}) {
 
 window.addEventListener("hashchange", () => { const h = parseHash(); show(h.name, h.params); });
 { const h = parseHash(); show(h.name, h.params); }
+
+// Guided demo
+$("#tour-btn").addEventListener("click", async () => { (await import("./core/tour.js")).startTour(); });
 
 // Clock
 const clockFmt = new Intl.DateTimeFormat("en-GB", { timeZone: "Asia/Kolkata", hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false });

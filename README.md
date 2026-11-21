@@ -29,15 +29,23 @@ python3 scripts/snapshot.py --warm
 
 This freezes every feed into `data/snapshots/`. If a source is unreachable during the demo, the server serves the last good copy and the UI marks it with a `stale` or `snapshot` badge.
 
-## Design: the "Yantra" language
+## Design: "Flight Ops"
 
-ASTRA's visual identity follows our first version's editorial style (serif display type, mono metadata, hairline grid) and roots it in Indian astronomy. The graduated stone instruments of **Jantar Mantar** inspire the signature elements:
-- **Palette:** ink and bone, with a *red-sandstone* signal colour and *instrument-brass* scales. It's warm on purpose, to stand apart from the usual navy-and-neon space dashboard.
-- **Graduated scales:** tick rulers under the navigation bar, on the hazard bars and on the progress bars.
-- **Samrat Yantra dial:** the safety rating is read like a sundial, with a gnomon over a graduated arc.
-- **Type:** Instrument Serif (display), Instrument Sans (text), JetBrains Mono (data). All three are self-hosted under the SIL Open Font License, so the site works offline.
+- **Hero:** a live, ray-traced orbital sunrise over India (WebGL shader, no libraries): day and night Earth textures with city lights, limb atmosphere, the sun breaking over the edge, a lens streak, procedural clouds and a twinkling starfield. It pauses when off-screen and respects reduced-motion settings.
+- **Type:** Archivo Expanded for headlines (inspired by launch-vehicle livery), Archivo for text, JetBrains Mono for numbers only. All self-hosted (SIL OFL).
+- **Colour:** graphite surfaces with a single ISRO-saffron signal colour; mint, gold and red are used only to signal safety levels.
+- **Details:** a PSLV-style livery stripe, and a sine-wave ground-track motif.
 
 ## What it does
+
+### Fleet readiness (joins domains 03, 04 and 06)
+Click any live alert, or open any place, to see:
+1. **Indian satellites overhead in the next 24 hours.** Radar (EOS-4, RISAT-2B series, NISAR, Drishti), optical (Cartosat, Resourcesat, EOS-08, HySIS, Firefly), weather (INSAT-3D/3DR/3DS, Oceansat, SCATSAT, SARAL) and communications (GSAT, CMS), each with its next pass and a 24-hour timeline. Passes are computed live with SGP4.
+2. **Whether each one is safe to rely on:** its closest approach this week from SOCRATES, marked Clear, Watch (1–5 km) or Alert (under 1 km).
+3. **NavIC positioning quality on the ground:** PDOP now and the best and worst values over the next 24 hours, plus a one-click NavIC emergency broadcast.
+
+### Guided demo
+The **Guided demo** button walks through the full story using Cyclone Dana (Odisha, Oct 2024): live alerts → Sentinel-1 radar flood map → Kendrapara safety check → Indian satellites over Kendrapara and their debris safety → NavIC broadcast → an Indian satellite's close approach on the 3D globe. Use the arrow keys or Next/Back.
 
 ### Safety Check (location hazard model)
 Search any place (or click any map) to get a **safety rating (A–E, 0–100)** and five hazard scores, each computed for **the next 72 hours** (live forecast) and for **a 1-in-10-year monsoon storm**:
@@ -48,7 +56,7 @@ Search any place (or click any map) to get a **safety rating (A–E, 0–100)** 
 | Bank overflow & runoff | SCS curve-number runoff from the heaviest 24 h of rain (curve number from soil saturation and slope), amplified on flat, low-lying ground; plus overbank spill when the river is above bankfull (2-yr) level |
 | Sediment & debris flow | Heavy, saturating rain × local slope (Horn's method on a 200 m DEM grid) × surrounding relief |
 | Flash flood | Peak 1 h / 3 h rain intensity × catchment relief × valley-floor position × soil saturation |
-| Earthquake | Distance- and depth-attenuated load from every USGS M4.5+ quake within 300 km since 1975 |
+| Long-term seismic exposure (shown separately, not part of the rating) | Distance- and depth-attenuated load from every USGS M4.5+ quake within 300 km since 1975 |
 
 Inputs: Copernicus GLO-90 DEM, GloFAS v4, ECMWF/GFS forecast with soil moisture, ERA5 1995–2024 rainfall (design storm), and USGS (all through Open-Meteo or USGS, free). Rating: combined = top hazard + 0.15 × the next two; safety = 100 − max(combined now, 0.7 × combined design). The page shows a terrain cross-section, the river forecast against its flood levels, hourly rain, nearby earthquakes, plain-language advice, and the full method.
 
@@ -121,6 +129,14 @@ js/workers/       propagate.js (catalogue SGP4)        derived-result cache → 
 ```
 
 Every API response carries an `X-Astra-Provenance` header (`live`, `cache`, `stale` or `snapshot`), which the UI shows.
+
+## What is real, what is illustrative
+- **Real, live data:** alerts, river discharge, rain forecasts, terrain, satellite orbits, close approaches, radar scenes.
+- **Screening estimates:** public orbit data is accurate to about 1 km, so close approaches are an early-warning screen, not a collision call. Collision chances are illustrative. The safety rating is not an official hazard assessment.
+- **Illustrative:** the NavIC emergency-message frame is our own design, not the official NavIC format. Satellite status comes from the public catalogue, not official ISRO status.
+
+## Credits
+Hero Earth textures: Solar System Scope (CC BY 4.0), based on NASA imagery. Fonts: Archivo and JetBrains Mono (SIL OFL). Maps: Esri, OpenStreetMap contributors, NASA GIBS, Bhuvan (NRSC), VEDAS (SAC).
 
 ## Honest limitations
 - Public TLE/SGP4 accuracy is roughly 1 km in LEO and worse as elements age. Conjunction results are for awareness, not manoeuvre decisions.

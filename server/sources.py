@@ -965,7 +965,7 @@ def _build_conjunctions():
         idx = {}
     rdr = csv.DictReader(io.StringIO(raw.decode("utf-8", "replace")))
     now = _now()
-    rows, seen, seen_pairs = [], set(), set()
+    rows, seen, seen_pairs, india_sats = [], set(), set(), set()
     total = lt1 = lt5 = 0
     india_rows = []
     for r in rdr:
@@ -979,7 +979,7 @@ def _build_conjunctions():
         seen.add(k)
         rng = _num(r["TCA_RANGE"]) or 99
         vrel = _num(r["TCA_RELATIVE_SPEED"]) or 0
-        if vrel < 0.05:      # co-moving pair (formation flying / docked / own launch debris): not a collision risk
+        if vrel < 0.5:       # co-moving pair (same launch, formation flying, docked): not a real near-miss
             continue
         pair = (a, b)
         if pair in seen_pairs:   # keep only the closest approach per pair
@@ -997,10 +997,18 @@ def _build_conjunctions():
                "maxProb": _num(r["MAX_PROB"]) or 0, "dse1": _num(r["DSE_1"]), "dse2": _num(r["DSE_2"])}
         if len(rows) < 400:
             rows.append(rec)
-        if (rec["owner1"] == "IND" or rec["owner2"] == "IND") and len(india_rows) < 200:
-            india_rows.append(rec)
+        if rec["owner1"] == "IND" or rec["owner2"] == "IND":
+            if rng < 5:
+                if rec["owner1"] == "IND" and rec["type1"] == "PAY":
+                    india_sats.add(rec["id1"])
+                if rec["owner2"] == "IND" and rec["type2"] == "PAY":
+                    india_sats.add(rec["id2"])
+            if len(india_rows) < 300:
+                india_rows.append(rec)
     by_prob = sorted(rows, key=lambda x: -x["maxProb"])[:100]
-    return {"generated": _iso(now), "total": total, "under1km": lt1, "under5km": lt5, "note": "distinct pairs; co-moving pairs (< 50 m/s) excluded",
+    return {"generated": _iso(now), "total": total, "under1km": lt1, "under5km": lt5,
+            "indiaSatsUnder5km": len(india_sats), "indiaSatIds": sorted(india_sats),
+            "note": "distinct pairs; co-moving pairs (relative speed < 0.5 km/s) excluded",
             "closest": rows[:200], "highestProb": by_prob, "india": india_rows}, prov
 
 

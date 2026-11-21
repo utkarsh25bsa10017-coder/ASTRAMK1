@@ -327,9 +327,9 @@ async function loadConjunctions() {
   try {
     conjData = await api("/api/conjunctions", { ttl: 600_000 });
     $("#conj-kpis").innerHTML = `
-      <div class="stat"><div class="v">${fmtNum(conjData.total)}</div><div class="l">pairs < 5 km</div></div>
+      <div class="stat"><div class="v">${fmtNum(conjData.total)}</div><div class="l">distinct pairs under 5 km</div></div>
       <div class="stat"><div class="v" style="color:var(--danger)">${fmtNum(conjData.under1km)}</div><div class="l">under 1 km</div></div>
-      <div class="stat"><div class="v" style="color:var(--navic)">${fmtNum(conjData.india.length)}</div><div class="l">involve India</div></div>`;
+      <div class="stat"><div class="v" style="color:var(--saffron)">${fmtNum(conjData.indiaSatsUnder5km ?? 0)}</div><div class="l">Indian sats under 5 km</div></div>`;
     renderConj("closest");
   } catch (e) {
     $("#conj-list").innerHTML = `<li class="skeleton">SOCRATES unavailable (${esc(e.message)}).</li>`;
