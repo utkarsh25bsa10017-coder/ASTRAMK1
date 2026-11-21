@@ -1,0 +1,227 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ASTRA · Space for Disaster & Orbital Safety</title>
+  <meta name="description" content="ASTRA: live disaster monitoring, space-debris safety and NavIC emergency connectivity, built on free satellite data.">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><circle cx='16' cy='16' r='6' fill='%23ffb347'/><ellipse cx='16' cy='16' rx='14' ry='5' fill='none' stroke='%2363d2ff' stroke-width='2' transform='rotate(-25 16 16)'/></svg>">
+  <link rel="stylesheet" href="vendor/leaflet/leaflet.css">
+  <link rel="stylesheet" href="vendor/cesium/Widgets/widgets.css">
+  <link rel="stylesheet" href="css/astra.css">
+  <script>window.CESIUM_BASE_URL = "vendor/cesium/";</script>
+  <script src="vendor/cesium/Cesium.js"></script>
+  <script src="vendor/leaflet/leaflet.js"></script>
+  <script src="vendor/chartjs/chart.umd.min.js"></script>
+  <script src="vendor/satellite/satellite.min.js"></script>
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="#overview" aria-label="ASTRA home">
+      <svg viewBox="0 0 32 32" width="26" height="26" aria-hidden="true"><circle cx="16" cy="16" r="5.5" fill="var(--accent-warm)"/><ellipse cx="16" cy="16" rx="14" ry="5" fill="none" stroke="var(--accent)" stroke-width="2" transform="rotate(-25 16 16)"/><circle cx="28" cy="10.5" r="2" fill="var(--accent)"/></svg>
+      <span>ASTRA</span>
+    </a>
+    <nav class="tabs" role="tablist">
+      <a href="#overview" data-view="overview" role="tab">Mission Control</a>
+      <a href="#disaster" data-view="disaster" role="tab">Disaster Watch</a>
+      <a href="#orbital" data-view="orbital" role="tab">Orbital Safety</a>
+      <a href="#navic" data-view="navic" role="tab">NavIC Link</a>
+      <a href="#gateway" data-view="gateway" role="tab">Data Gateway</a>
+    </nav>
+    <div class="topbar-right">
+      <span id="feed-pill" class="pill" title="Data feed status">connecting…</span>
+      <span id="utc-clock" class="clock mono">--:--:-- UTC</span>
+    </div>
+  </header>
+
+  <main>
+    <!-- ============ MISSION CONTROL ============ -->
+    <section id="view-overview" class="view" data-view="overview">
+      <div class="hero">
+        <div>
+          <h1>Space-based awareness for disasters, debris and navigation</h1>
+          <p class="muted">ASTRA fuses official Indian alerts, global hazard feeds, satellite radar, the public space catalogue and the NavIC constellation into one live picture. Every number below comes from a free public source.</p>
+        </div>
+      </div>
+      <div class="kpis" id="kpis"></div>
+      <div class="grid-2">
+        <div class="card">
+          <div class="card-h"><h2>Highest-priority alerts</h2><a href="#disaster" class="link">Open Disaster Watch →</a></div>
+          <ul class="alert-list compact" id="ov-alerts"><li class="skeleton">Loading alerts…</li></ul>
+        </div>
+        <div class="card">
+          <div class="card-h"><h2>Closest predicted approaches</h2><a href="#orbital" class="link">Open Orbital Safety →</a></div>
+          <table class="table" id="ov-conj"><tbody><tr><td class="skeleton">Loading conjunctions…</td></tr></tbody></table>
+        </div>
+      </div>
+      <div class="grid-3">
+        <div class="card">
+          <div class="card-h"><h2>NavIC constellation</h2><a href="#navic" class="link">Open NavIC Link →</a></div>
+          <div id="ov-navic" class="navic-chips"><span class="skeleton">Loading…</span></div>
+        </div>
+        <div class="card">
+          <div class="card-h"><h2>Space weather</h2></div>
+          <div class="chart-box short"><canvas id="ov-kp"></canvas></div>
+          <p class="note" id="ov-sw-note"></p>
+        </div>
+        <div class="card">
+          <div class="card-h"><h2>How the modules connect</h2></div>
+          <ol class="flow">
+            <li><b>Detect</b>: SACHET, GDACS, USGS and EONET alerts land in Disaster Watch.</li>
+            <li><b>Assess</b>: rainfall, river discharge, waves and Sentinel-1 radar show impact.</li>
+            <li><b>Protect assets</b>: Orbital Safety screens the satellites we rely on against debris.</li>
+            <li><b>Reach people</b>: NavIC Link packs the alert into a short satellite broadcast for areas with no network.</li>
+          </ol>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ DISASTER WATCH ============ -->
+    <section id="view-disaster" class="view split" data-view="disaster">
+      <aside class="panel left">
+        <div class="panel-h">
+          <h2>Live alerts</h2>
+          <span class="muted small" id="alert-count"></span>
+        </div>
+        <div class="filters">
+          <input id="alert-search" type="search" placeholder="Search place, event, agency…" aria-label="Search alerts">
+          <div class="chips" id="src-chips"></div>
+          <div class="chips" id="type-chips"></div>
+          <label class="toggle"><input type="checkbox" id="india-only"> India region only</label>
+        </div>
+        <ul class="alert-list" id="alert-list"><li class="skeleton">Loading alerts…</li></ul>
+      </aside>
+      <div class="map-wrap">
+        <div id="dmap" class="map"></div>
+        <div class="map-toolbar">
+          <button class="btn" id="btn-case">Flood case study</button>
+          <button class="btn ghost" id="btn-cyclones">Cyclone tracks</button>
+        </div>
+        <div class="legend" id="dmap-legend"></div>
+        <div class="swipe" id="swipe" hidden>
+          <input type="range" id="swipe-range" min="0" max="100" value="50" aria-label="Before/after swipe">
+          <div class="swipe-labels"><span id="swipe-before">Before</span><span id="swipe-after">After</span></div>
+        </div>
+      </div>
+      <aside class="panel right" id="detail-panel">
+        <div class="empty-state" id="detail-empty">
+          <h3>Select an alert or click the map</h3>
+          <p class="muted">You'll get rainfall forecast, river discharge (GloFAS) and wave height for that location, plus a one-click NavIC broadcast.</p>
+        </div>
+        <div id="detail" hidden></div>
+      </aside>
+    </section>
+
+    <!-- ============ ORBITAL SAFETY ============ -->
+    <section id="view-orbital" class="view split" data-view="orbital">
+      <aside class="panel left">
+        <div class="panel-h"><h2>Orbital population</h2><span class="muted small" id="orb-count"></span></div>
+        <div class="filters">
+          <input id="sat-search" type="search" placeholder="Find object by name or NORAD ID…" aria-label="Find object">
+          <ul class="search-results" id="sat-results"></ul>
+          <div class="layer-list" id="orb-layers"></div>
+        </div>
+        <div class="card flat">
+          <h3>Fragmentation events still in orbit</h3>
+          <ul class="frag-list" id="frag-list"></ul>
+        </div>
+      </aside>
+      <div class="globe-slot" id="orbital-globe-slot">
+        <div class="time-ctl">
+          <button class="btn ghost" data-speed="1" title="Real time">1×</button>
+          <button class="btn ghost" data-speed="60">60×</button>
+          <button class="btn ghost" data-speed="600">600×</button>
+          <button class="btn ghost" id="btn-now">Now</button>
+          <span class="mono small" id="sim-time"></span>
+        </div>
+        <div class="globe-status" id="globe-status">Loading orbital catalogue…</div>
+      </div>
+      <aside class="panel right">
+        <div class="tabs-inner" role="tablist">
+          <button class="active" data-pane="conj">Conjunctions</button>
+          <button data-pane="object">Object</button>
+          <button data-pane="stats">Statistics</button>
+        </div>
+        <div class="pane" data-pane="conj">
+          <div class="mini-kpis" id="conj-kpis"></div>
+          <div class="seg" id="conj-seg">
+            <button class="active" data-list="closest">Closest</button>
+            <button data-list="highestProb">Highest probability</button>
+            <button data-list="india">Indian assets</button>
+          </div>
+          <ul class="conj-list" id="conj-list"></ul>
+          <p class="note">Source: CelesTrak SOCRATES (7-day screening of public TLEs). Use for awareness, not for manoeuvre decisions.</p>
+        </div>
+        <div class="pane" data-pane="object" hidden>
+          <div id="obj-detail" class="empty-state"><h3>No object selected</h3><p class="muted">Click a point on the globe or search for an object.</p></div>
+        </div>
+        <div class="pane" data-pane="stats" hidden>
+          <h3>Objects in orbit by year</h3>
+          <div class="chart-box"><canvas id="ch-growth"></canvas></div>
+          <h3>LEO crowding by altitude</h3>
+          <div class="chart-box"><canvas id="ch-alt"></canvas></div>
+          <h3>Who owns what's up there</h3>
+          <div class="chart-box tall"><canvas id="ch-owners"></canvas></div>
+          <h3>Space weather (drag driver)</h3>
+          <div class="chart-box short"><canvas id="ch-kp"></canvas></div>
+        </div>
+      </aside>
+    </section>
+
+    <!-- ============ NAVIC LINK ============ -->
+    <section id="view-navic" class="view split" data-view="navic">
+      <aside class="panel left">
+        <div class="panel-h"><h2>NavIC constellation</h2></div>
+        <div class="loc-row">
+          <span class="muted small">Observer</span>
+          <span id="obs-label" class="mono small">New Delhi (default)</span>
+          <button class="btn ghost small" id="btn-locate">Use my location</button>
+        </div>
+        <table class="table navic-table" id="navic-table"><tbody><tr><td class="skeleton">Loading NavIC orbits…</td></tr></tbody></table>
+        <label class="toggle"><input type="checkbox" id="navic-partial" checked> Count partially operational satellites</label>
+        <div class="card flat">
+          <h3>Sky view</h3>
+          <canvas id="skyplot" width="320" height="320" aria-label="Sky plot of NavIC and GPS satellites"></canvas>
+          <div class="legend-inline"><span class="dot navic"></span>NavIC <span class="dot gps"></span>GPS <span class="dot off"></span>below mask / not operational</div>
+        </div>
+      </aside>
+      <div class="navic-center">
+        <div class="globe-slot" id="navic-globe-slot"></div>
+        <div class="dop-cards" id="dop-cards"></div>
+      </div>
+      <aside class="panel right">
+        <div class="panel-h"><h2>Coverage quality (PDOP)</h2></div>
+        <div id="pdop-map" class="map small-map"></div>
+        <div class="seg" id="pdop-seg">
+          <button class="active" data-mode="navic">NavIC only</button>
+          <button data-mode="gps">GPS only</button>
+          <button data-mode="both">NavIC + GPS</button>
+        </div>
+        <p class="note">Lower PDOP means better positioning geometry. Computed live from orbital elements with a 10° elevation mask.</p>
+        <div class="card flat" id="broadcast-card">
+          <h3>Emergency broadcast simulator</h3>
+          <p class="muted small">Pick an alert and ASTRA packs it into a compact message frame and checks which NavIC satellites can relay it to receivers in the alert area.</p>
+          <select id="bc-alert" aria-label="Alert to broadcast"><option>Loading alerts…</option></select>
+          <button class="btn" id="bc-send">Compose broadcast</button>
+          <div id="bc-out"></div>
+        </div>
+      </aside>
+    </section>
+
+    <!-- ============ DATA GATEWAY ============ -->
+    <section id="view-gateway" class="view" data-view="gateway">
+      <div class="hero">
+        <div>
+          <h1>Data gateway</h1>
+          <p class="muted">Every source ASTRA uses is free and needs no login. The server caches each feed, respects provider rate limits, and falls back to the last good copy if a source goes down, so the dashboard keeps working.</p>
+        </div>
+      </div>
+      <div class="card"><table class="table gateway" id="gw-table"><tbody><tr><td class="skeleton">Loading…</td></tr></tbody></table></div>
+      <p class="note">Provenance badges: <span class="prov live">live</span> fetched just now · <span class="prov cache">cache</span> within refresh interval · <span class="prov stale">stale</span> source down, last good copy · <span class="prov snapshot">snapshot</span> offline demo copy.</p>
+    </section>
+  </main>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>
