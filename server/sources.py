@@ -11,7 +11,7 @@ import math
 import re
 import urllib.parse
 import xml.etree.ElementTree as ET
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, wait as _wait
 from datetime import datetime, timedelta, timezone
 
 from gateway import SourceUnavailable, cached_result, fetch_raw, worst
@@ -210,9 +210,15 @@ def _build_sachet():
         except Exception:
             return item, None
 
+    # Fetch CAP details in parallel, within a time budget (serverless functions have hard limits).
+    ex = ThreadPoolExecutor(max_workers=16)
+    futs = [ex.submit(detail, it) for it in items]
+    _wait(futs, timeout=25)
+    ex.shutdown(wait=False, cancel_futures=True)
+    results = [f.result() if f.done() and not f.cancelled() else (it, None) for f, it in zip(futs, items)]
     alerts = []
-    with ThreadPoolExecutor(max_workers=12) as ex:
-        for item, d in ex.map(detail, items):
+    if True:
+        for item, d in results:
             d = d or {}
             sev = CAP_SEV.get((d.get("severity") or "").lower(), 0)
             when = _parse_dt(d.get("effective")) or _parse_dt(item["pub"])

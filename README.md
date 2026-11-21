@@ -17,6 +17,9 @@ python3 server/app.py          # then open http://127.0.0.1:8000
 
 The first load of each feed takes a few seconds while the server fetches and caches it. After that, pages load from the cache.
 
+### Deploy on Vercel
+The repo is ready to deploy as is: import it in Vercel, choose framework preset **Other**, and leave the build command, output directory and root directory empty. `vercel.json` serves `web/` as static files and runs the gateway as a Python serverless function (`api/index.py`, standard library only). On Vercel the cache lives in `/tmp` (per instance), and the committed `data/snapshots/` are the fallback. The first request to a feed on a cold instance can take up to about 30 s.
+
 ### Offline / demo-day mode
 Venue Wi-Fi can block APIs, and providers can rate-limit. Before the demo, open every tab once, then run:
 

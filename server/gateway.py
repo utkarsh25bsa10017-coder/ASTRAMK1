@@ -17,10 +17,15 @@ import urllib.request
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-CACHE_DIR = ROOT / "data" / "cache"
+SERVERLESS = bool(os.environ.get("VERCEL") or os.environ.get("AWS_LAMBDA_FUNCTION_NAME"))
+# Serverless platforms have a read-only code directory; only /tmp is writable.
+CACHE_DIR = Path("/tmp/astra-cache") if SERVERLESS else ROOT / "data" / "cache"
 SNAP_DIR = ROOT / "data" / "snapshots"
 CACHE_DIR.mkdir(parents=True, exist_ok=True)
-SNAP_DIR.mkdir(parents=True, exist_ok=True)
+try:
+    SNAP_DIR.mkdir(parents=True, exist_ok=True)
+except OSError:
+    pass
 
 USER_AGENT = "ASTRA-hackathon-dashboard/1.0 (educational, non-commercial)"
 
