@@ -1,7 +1,38 @@
 import { $, $$, chartDefaults } from "./core/util.js";
 import { onProvenance, provenance } from "./core/api.js";
 
-chartDefaults();
+// Vendor scripts are deferred and this module is async, so it can run before Cesium/Leaflet/Chart.js exist.
+// Every deferred script has executed by DOMContentLoaded. readyState turns "interactive" *before* deferred scripts
+// run, so check the globals themselves; on "load" give up waiting (a vendor failed) and let the view report it.
+const haveVendor = () => window.Cesium && window.L && window.Chart && window.satellite;
+const vendorReady = new Promise(r => {
+  if (haveVendor() || document.readyState === "complete") return r();
+  document.addEventListener("DOMContentLoaded", () => haveVendor() && r(), { once: true });
+  window.addEventListener("load", r, { once: true });
+});
+vendorReady.then(chartDefaults);
+const NEEDS_VENDOR = new Set(["safety", "disaster", "fleet", "orbital", "navic"]);   // the landing only needs Chart.js, later
+
+// Three workspaces; each remembers the page you were last on.
+const GROUP = { disaster: "ground", safety: "ground", orbital: "space", fleet: "space", navic: "signal" };
+const lastIn = {};
+try { Object.assign(lastIn, JSON.parse(sessionStorage.getItem("astra.lastIn") || "{}")); } catch {}
+function syncNav(name) {
+  const g = GROUP[name];
+  if (g) { lastIn[g] = name; try { sessionStorage.setItem("astra.lastIn", JSON.stringify(lastIn)); } catch {} }
+  $$(".tabs .grp").forEach(el => {
+    el.classList.toggle("active", el.dataset.grp === g);
+    if (lastIn[el.dataset.grp]) el.querySelector(".grp-l").setAttribute("href", "#" + lastIn[el.dataset.grp]);
+  });
+  // On narrow screens the strip scrolls: keep the open workspace in view
+  const act = $(".tabs .grp.active"), strip = $(".tabs");
+  if (act && strip.scrollWidth > strip.clientWidth) strip.scrollLeft = act.offsetLeft - (strip.clientWidth - act.offsetWidth) / 2;
+  $$(".tabs a[data-view]").forEach(a => {
+    const on = a.dataset.view === name;
+    a.classList.toggle("active", on);
+    on ? a.setAttribute("aria-current", "page") : a.removeAttribute("aria-current");
+  });
+}
 
 const modules = {
   overview: () => import("./views/overview.js"),
@@ -22,8 +53,9 @@ function parseHash() {
 async function show(name, params = {}) {
   if (!modules[name]) name = "overview";
   $$(".view").forEach(v => v.classList.toggle("active", v.dataset.view === name));
-  $$(".tabs a").forEach(a => a.classList.toggle("active", a.dataset.view === name));
+  syncNav(name);
   try {
+    if (NEEDS_VENDOR.has(name)) await vendorReady;
     if (!loaded[name]) {
       const mod = await modules[name]();
       loaded[name] = mod;

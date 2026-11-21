@@ -365,6 +365,49 @@ ALERT_BUILDERS = {"sachet": (_build_sachet, 10 * MIN), "ncs": (_build_ncs, 10 * 
                   "usgs": (_build_usgs, 5 * MIN), "eonet": (_build_eonet, 30 * MIN)}
 
 
+def _simplify(ring, tol=0.006):
+    """Douglas-Peucker on a [lon, lat] ring (tolerance in degrees, ~600 m). Keeps map outlines, drops ~90% of points."""
+    if len(ring) < 40:
+        return ring
+    keep = [False] * len(ring)
+    keep[0] = keep[-1] = True
+    stack = [(0, len(ring) - 1)]
+    while stack:
+        a, b = stack.pop()
+        (x1, y1), (x2, y2) = ring[a][:2], ring[b][:2]
+        dx, dy = x2 - x1, y2 - y1
+        norm = (dx * dx + dy * dy) ** 0.5 or 1e-12
+        best, idx = 0.0, -1
+        for i in range(a + 1, b):
+            x, y = ring[i][:2]
+            d = abs(dy * (x - x1) - dx * (y - y1)) / norm
+            if d > best:
+                best, idx = d, i
+        if best > tol and idx > 0:
+            keep[idx] = True
+            stack += [(a, idx), (idx, b)]
+    return [[round(p[0], 3), round(p[1], 3)] for p, k in zip(ring, keep) if k]
+
+
+_SLIM = {}
+
+
+def _slim_alert(a):
+    """Smaller copy for the browser: simplified polygons, rounded coordinates. Cached by id."""
+    k = (a.get("id"), a.get("time"))
+    if k not in _SLIM:
+        b = dict(a)
+        if b.get("rings"):
+            b["rings"] = [_simplify(r) for r in b["rings"]]
+        for f in ("lat", "lon"):
+            if isinstance(b.get(f), float):
+                b[f] = round(b[f], 4)
+        if len(_SLIM) > 5000:
+            _SLIM.clear()
+        _SLIM[k] = b
+    return _SLIM[k]
+
+
 def alerts():
     def one(name):
         builder, ttl = ALERT_BUILDERS[name]
@@ -378,7 +421,7 @@ def alerts():
         results = list(ex.map(one, ALERT_BUILDERS))
     merged, status = [], {}
     for name, data, st in results:
-        merged.extend(data)
+        merged.extend(_slim_alert(a) for a in data)
         status[name] = st
     merged.sort(key=lambda a: (-(a["severity"] or 0), a["time"] or ""), reverse=False)
     merged.sort(key=lambda a: a["time"] or "", reverse=True)

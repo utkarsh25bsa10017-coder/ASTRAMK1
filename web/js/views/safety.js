@@ -1,6 +1,8 @@
 import { api } from "../core/api.js";
 import { attachSearch, goSafety } from "../core/search.js";
 import { $, esc, fmtNum, fmtIST, timeAgo, toast, makeChart, PAL, riskColor, gradeColor } from "../core/util.js";
+import { waitCard } from "../core/loader.js";
+import { getFocus, setFocus } from "../core/focus.js";
 
 let map = null, current = null, search;
 const ORDER = ["riverine", "bank", "sediment", "flash"];   // water hazards: these make the rating
@@ -19,6 +21,9 @@ export function show(params = {}) {
   if (params.lat && params.lon) {
     const key = `${(+params.lat).toFixed(3)},${(+params.lon).toFixed(3)}`;
     if (key !== current) run(+params.lat, +params.lon, params.name);
+  } else if (!current && getFocus()) {   // a place picked elsewhere (e.g. Fleet readiness)
+    const f = getFocus();
+    run(f.lat, f.lon, f.name);
   }
   setTimeout(() => map?.invalidateSize(), 60);
 }
@@ -32,12 +37,15 @@ function locate() {
 
 async function run(lat, lon, name) {
   current = `${lat.toFixed(3)},${lon.toFixed(3)}`;
+  setFocus({ lat, lon, name });
   const out = $("#sc-result");
-  out.innerHTML = `<p class="loading-line">Reading terrain, 40 years of river flow, rainfall and seismic history for ${esc(name || current)}</p>`;
+  const stop = waitCard(out, `Reading terrain, 40 years of river flow, rainfall and seismic history for ${esc(name || current)}`);
   try {
     const d = await api(`/api/assess?lat=${lat.toFixed(4)}&lon=${lon.toFixed(4)}`, { ttl: 900_000 });
+    stop();
     render(d, name);
   } catch (e) {
+    stop();
     out.innerHTML = `<div class="empty-state" style="padding-left:0"><p class="serif">Couldn't assess this place.</p><p>${esc(e.message)}</p></div>`;
   }
 }

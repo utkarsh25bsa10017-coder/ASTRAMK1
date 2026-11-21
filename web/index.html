@@ -12,10 +12,12 @@
   <link rel="stylesheet" href="vendor/cesium/Widgets/widgets.css">
   <link rel="stylesheet" href="css/astra.css">
   <script>window.CESIUM_BASE_URL = "vendor/cesium/";</script>
-  <script src="vendor/cesium/Cesium.js"></script>
-  <script src="vendor/leaflet/leaflet.js"></script>
-  <script src="vendor/chartjs/chart.umd.min.js"></script>
-  <script src="vendor/satellite/satellite.min.js"></script>
+  <!-- Vendor libraries never block first paint. app.js is async: the landing runs at once, and views that
+       need the globe or maps wait for DOMContentLoaded (by then every deferred script has run). -->
+  <script defer src="vendor/cesium/Cesium.js"></script>
+  <script defer src="vendor/leaflet/leaflet.js"></script>
+  <script defer src="vendor/chartjs/chart.umd.min.js"></script>
+  <script defer src="vendor/satellite/satellite.min.js"></script>
 </head>
 <body>
   <header class="topbar">
@@ -31,18 +33,26 @@
       <span>Astra</span>
       <small>Disaster · Orbit · NavIC</small>
     </a>
-    <nav class="tabs" role="tablist">
-      <a href="#overview" data-view="overview" role="tab"><i>01</i>Briefing</a>
-      <a href="#safety" data-view="safety" role="tab"><i>02</i>Safety check</a>
-      <a href="#disaster" data-view="disaster" role="tab"><i>03</i>Disaster watch</a>
-      <a href="#fleet" data-view="fleet" role="tab"><i>04</i>Fleet readiness</a>
-      <a href="#orbital" data-view="orbital" role="tab"><i>05</i>Orbital safety</a>
-      <a href="#navic" data-view="navic" role="tab"><i>05</i>NavIC link</a>
-      <a href="#gateway" data-view="gateway" role="tab"><i>06</i>Sources</a>
+    <!-- Three workspaces. The active one opens to show its pages; every old #hash link still works. -->
+    <nav class="tabs" aria-label="Workspaces">
+      <div class="grp" data-grp="ground">
+        <a class="grp-l" href="#disaster" title="Disasters on the ground">Ground</a>
+        <a href="#disaster" data-view="disaster">Disaster<span class="lw"> watch</span></a>
+        <a href="#safety" data-view="safety">Safety<span class="lw"> check</span></a>
+      </div>
+      <div class="grp" data-grp="space">
+        <a class="grp-l" href="#orbital" title="Satellites and debris">Space</a>
+        <a href="#orbital" data-view="orbital">Orbital<span class="lw"> safety</span></a>
+        <a href="#fleet" data-view="fleet">Fleet<span class="lw"> readiness</span></a>
+      </div>
+      <div class="grp" data-grp="signal">
+        <a class="grp-l" href="#navic" title="NavIC navigation and messaging">Signal</a>
+        <a href="#navic" data-view="navic">NavIC<span class="lw"> link</span></a>
+      </div>
     </nav>
     <div class="topbar-right">
       <button class="tour-btn" id="tour-btn" title="One-click walkthrough: Cyclone Dana">▶ Guided demo</button>
-      <span id="feed-pill" class="pill" title="Data feed status">connecting</span>
+      <a href="#gateway" id="feed-pill" class="pill" title="Data feed status · open Sources">connecting</a>
       <span id="utc-clock" class="clock">--:--:-- IST</span>
     </div>
   </header>
@@ -120,6 +130,10 @@
             <div style="--lc:var(--red)"><b>Illustrative</b><p>The NavIC emergency-message frame is our own demonstration design, not the official NavIC format. Satellite status comes from the public catalogue, not official ISRO status.</p></div>
           </div>
         </section>
+        <footer class="site-foot">
+          <span><b>ASTRA</b> · Team T22 Astro World · built on free public data</span>
+          <nav><a href="#disaster">Ground</a><a href="#orbital">Space</a><a href="#navic">Signal</a><a href="#gateway">Sources &amp; feed status →</a></nav>
+        </footer>
       </div>
     </section>
 
@@ -215,35 +229,13 @@
         <ul class="frag-list" id="frag-list"></ul>
       </aside>
       <div class="globe-slot" id="orbital-globe-slot">
-        <div class="time-ctl">
-          <button class="btn ghost small" data-speed="1" title="Real time">1×</button>
-          <button class="btn ghost small" data-speed="60">60×</button>
-          <button class="btn ghost small" data-speed="600">600×</button>
-          <button class="btn ghost small" id="btn-now">Now</button>
-          <span class="mono" id="sim-time"></span>
+        <div class="globe-tools glass">
+          <button class="icon-btn" id="z-in" title="Zoom in" aria-label="Zoom in">+</button>
+          <button class="icon-btn" id="z-out" title="Zoom out" aria-label="Zoom out">−</button>
+          <button class="icon-btn wide" id="btn-stats" title="Catalogue statistics">Statistics</button>
         </div>
-        <div class="globe-status" id="globe-status">Loading orbital catalogue…</div>
-      </div>
-      <aside class="panel right">
-        <div class="tabs-inner" role="tablist">
-          <button class="active" data-pane="conj">Conjunctions</button>
-          <button data-pane="object">Object</button>
-          <button data-pane="stats">Statistics</button>
-        </div>
-        <div class="pane" data-pane="conj">
-          <div class="mini-kpis" id="conj-kpis"></div>
-          <div class="seg" id="conj-seg">
-            <button class="active" data-list="closest">Closest</button>
-            <button data-list="highestProb">Probability</button>
-            <button data-list="india">Indian assets</button>
-          </div>
-          <ul class="conj-list" id="conj-list"></ul>
-          <p class="note">CelesTrak SOCRATES, 7-day screening of public TLEs. For awareness, not manoeuvre decisions.</p>
-        </div>
-        <div class="pane" data-pane="object" hidden>
-          <div id="obj-detail" class="empty-state"><h3>Object</h3><p class="serif">No object selected.</p><p>Click a point on the globe or search for an object.</p></div>
-        </div>
-        <div class="pane" data-pane="stats" hidden>
+        <aside class="stats-drawer glass" id="stats-drawer" hidden>
+          <div class="panel-h"><h2>Statistics</h2><button class="icon-btn" id="stats-close" aria-label="Close statistics">×</button></div>
           <h3>Objects in orbit by year</h3>
           <div class="chart-box"><canvas id="ch-growth"></canvas></div>
           <h3>LEO crowding by altitude</h3>
@@ -252,6 +244,41 @@
           <div class="chart-box tall"><canvas id="ch-owners"></canvas></div>
           <h3>Space weather · drag driver</h3>
           <div class="chart-box short"><canvas id="ch-kp"></canvas></div>
+        </aside>
+        <div class="globe-status" id="globe-status">Loading orbital catalogue…</div>
+        <div class="timebar glass" id="timebar">
+          <button class="icon-btn" id="t-minus" title="Back 10 min (Shift: 1 h). Keyboard: ←" aria-label="Step back">−</button>
+          <div class="tb-track">
+            <div class="tb-ticks" id="t-ticks" aria-hidden="true"></div>
+            <input type="range" id="t-range" aria-label="Simulation time, now minus 6 hours to plus 7 days">
+            <span class="tb-label" id="t-label"></span>
+          </div>
+          <button class="icon-btn" id="t-plus" title="Forward 10 min (Shift: 1 h). Keyboard: →" aria-label="Step forward">+</button>
+          <div class="seg tb-speed" role="group" aria-label="Playback speed">
+            <button data-speed="1" title="Real time">1×</button><button data-speed="60">60×</button><button data-speed="600">600×</button>
+          </div>
+          <button class="btn ghost small" id="btn-now">Now</button>
+        </div>
+      </div>
+      <aside class="panel right">
+        <div class="tabs-inner" role="tablist">
+          <button class="active" data-pane="conj">Close approaches</button>
+          <button data-pane="object">Object</button>
+        </div>
+        <div class="pane" data-pane="conj">
+          <div class="mini-kpis" id="conj-kpis"></div>
+          <div class="conj-ctl">
+            <label class="sel">Sort
+              <select id="conj-sort"><option value="range">Closest</option><option value="time">Soonest</option><option value="prob">Probability</option></select>
+            </label>
+            <label class="toggle"><input type="checkbox" id="conj-all"> All objects, not just Indian</label>
+          </div>
+          <ul class="conj-list" id="conj-list"></ul>
+          <p class="note">Click a pair to jump the clock to its closest approach.</p>
+          <p class="note">CelesTrak SOCRATES, 7-day screening of public TLEs. For awareness, not manoeuvre decisions.</p>
+        </div>
+        <div class="pane" data-pane="object" hidden>
+          <div id="obj-detail" class="empty-state"><h3>Object</h3><p class="serif">No object selected.</p><p>Click a point on the globe or search for an object.</p></div>
         </div>
       </aside>
     </section>
@@ -310,6 +337,6 @@
   </main>
 
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
-  <script type="module" src="js/app.js"></script>
+  <script type="module" async src="js/app.js"></script>
 </body>
 </html>

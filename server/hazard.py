@@ -131,7 +131,25 @@ def _build_earthquakes():
 
 
 def earthquakes():
-    return cached_result("earthquakes", 10 * MIN, _build_earthquakes)
+    data, prov = cached_result("earthquakes", 10 * MIN, _build_earthquakes)
+    return _slim_quakes(data), prov
+
+
+def _slim_quakes(d):
+    """Drop empty fields and round numbers: about half the bytes, same information."""
+    def slim(e):
+        out = {}
+        for k, v in e.items():
+            if v is None or v == "" or v is False:
+                continue
+            if k in ("lat", "lon") and isinstance(v, float):
+                v = round(v, 3)
+            elif k == "depth" and isinstance(v, float):
+                v = round(v, 1)
+            out[k] = v
+        out.setdefault("india", False)
+        return out
+    return {**d, "events": [slim(e) for e in d.get("events", [])]}
 
 
 # ---------------------------------------------------------------------------

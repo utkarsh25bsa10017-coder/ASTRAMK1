@@ -3,6 +3,7 @@
 import { api } from "../core/api.js";
 import { satrec, ecfAt, observer, look, orbitInfo, dop, dopQuality } from "../core/orbitmath.js";
 import { $, esc, fmtNum, fmtIST, timeAgo, toast, PAL, TYPE_ICON, SRC_LABEL } from "../core/util.js";
+import { getFocus, setFocus } from "../core/focus.js";
 
 const ROLES = [
   { key: "radar", label: "Radar imaging", why: "sees through cloud, day or night", re: /EOS-4\b|EOS-04|RISAT|NISAR|DRISHTI/, color: PAL.saffron, minEl: 40 },
@@ -32,7 +33,10 @@ export async function init() {
 
 export function show(params = {}) {
   if (params.lat && params.lon) run(+params.lat, +params.lon, params.name || "", params.alert);
-  else if (!$("#fl-result").innerHTML.trim() && alerts.length) {
+  else if (!$("#fl-result").innerHTML.trim() && getFocus()) {   // a place picked elsewhere (e.g. Safety check)
+    const f = getFocus();
+    run(f.lat, f.lon, f.name);
+  } else if (!$("#fl-result").innerHTML.trim() && alerts.length) {
     const a = alerts[0];
     run(a.lat, a.lon, a.area || a.title.slice(0, 60), a.id);
   }
@@ -88,6 +92,7 @@ function closeApproach(norad) {
 }
 
 async function run(lat, lon, name, alertId) {
+  setFocus({ lat, lon, name });
   const out = $("#fl-result");
   out.innerHTML = `<p class="loading-line">Propagating the Indian fleet over ${esc(name || `${lat.toFixed(2)}, ${lon.toFixed(2)}`)} for the next 24 hours</p>`;
   try { await loadData(); } catch (e) { out.innerHTML = `<p class="muted">Satellite catalogue unavailable: ${esc(e.message)}</p>`; return; }

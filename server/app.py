@@ -55,6 +55,23 @@ def _health_with_cache():
     return h
 
 
+# CDN cache lifetimes (seconds) per endpoint. The edge serves the stored copy instantly and refreshes it in the
+# background (stale-while-revalidate), so visitors never wait on slow upstream feeds. Errors are never cached.
+EDGE_TTL = [("/api/health", 0), ("/api/gateway", 0), ("/api/alerts", 120), ("/api/earthquakes", 300),
+            ("/api/conjunctions", 1800), ("/api/catalog/", 7200), ("/api/orbits/", 7200), ("/api/spaceweather", 900),
+            ("/api/cyclones", 3600), ("/api/flood/", 86400), ("/api/geocode", 86400), ("/api/assess", 1800),
+            ("/api/weather", 1800), ("/api/gdacs/", 3600)]
+
+
+def edge_cache(path: str, code: int, prov: str) -> str:
+    ttl = next((t for pre, t in EDGE_TTL if path.startswith(pre)), 0)
+    if code != 200 or ttl <= 0:
+        return "no-store"
+    if prov in ("stale", "snapshot"):      # fallback data: let the edge retry the live source soon
+        ttl = min(ttl, 60)
+    return f"public, max-age=0, s-maxage={ttl}, stale-while-revalidate=86400"
+
+
 def route(path: str, qs: dict):
     """Return (payload, provenance)."""
     p = path.rstrip("/")
@@ -118,7 +135,7 @@ class Handler(SimpleHTTPRequestHandler):
         qs = urllib.parse.parse_qs(u.query)
         try:
             payload, prov = route(u.path, qs)
-            self._json(200, payload, prov)
+            self._json(200, payload, prov, edge_cache(u.path, 200, prov))
         except KeyError:
             self._json(404, {"error": "unknown endpoint"}, "none")
         except ValueError as e:
@@ -129,16 +146,20 @@ class Handler(SimpleHTTPRequestHandler):
             traceback.print_exc()
             self._json(500, {"error": type(e).__name__, "detail": str(e)[:300]}, "none")
 
-    def _json(self, code, payload, prov):
+    def _json(self, code, payload, prov, cache="no-store"):
         body = json.dumps(payload, separators=(",", ":")).encode()
-        gz = "gzip" in (self.headers.get("Accept-Encoding") or "") and len(body) > 1024
+        raw_len = len(body)
+        # On Vercel the edge compresses (brotli/gzip) per client; compressing here would confuse its cache.
+        gz = not gateway.SERVERLESS and "gzip" in (self.headers.get("Accept-Encoding") or "") and len(body) > 1024
         if gz:
             body = gzip.compress(body, compresslevel=5)
         self.send_response(code)
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("X-Astra-Provenance", prov)
-        self.send_header("Access-Control-Expose-Headers", "X-Astra-Provenance")
-        self.send_header("Cache-Control", "no-store")
+        self.send_header("X-Uncompressed-Length", str(raw_len))   # lets the browser show real download progress
+        self.send_header("Access-Control-Expose-Headers", "X-Astra-Provenance, X-Uncompressed-Length")
+        self.send_header("Cache-Control", cache)
+        self.send_header("Vary", "Accept-Encoding")
         if gz:
             self.send_header("Content-Encoding", "gzip")
         self.send_header("Content-Length", str(len(body)))

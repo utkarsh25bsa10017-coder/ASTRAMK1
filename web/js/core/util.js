@@ -88,6 +88,10 @@ export function chartDefaults() {
 }
 
 export function makeChart(canvas, config) {
+  if (!window.Chart) {   // Chart.js is a deferred script; draw once it has run
+    document.addEventListener("DOMContentLoaded", () => makeChart(canvas, config), { once: true });
+    return null;
+  }
   if (canvas._chart) canvas._chart.destroy();
   canvas._chart = new window.Chart(canvas, config);
   return canvas._chart;

@@ -21,7 +21,7 @@ export function getGlobe() {
   try {
     const esri = new C.UrlTemplateImageryProvider({
       url: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
-      maximumLevel: 10, credit: "Imagery © Esri, Maxar, Earthstar Geographics",
+      maximumLevel: 8, credit: "Imagery © Esri, Maxar, Earthstar Geographics",
     });
     const layer = viewer.imageryLayers.addImageryProvider(esri);
     layer.brightness = 0.62;   // muted, warm imagery so data reads on top
@@ -42,6 +42,8 @@ export function getGlobe() {
   scene.screenSpaceCameraController.maximumZoomDistance = 250_000_000;
   viewer.camera.setView({ destination: C.Cartesian3.fromDegrees(80, 15, 28_000_000) });
   viewer.cesiumWidget.creditContainer.style.display = "none";
+  // Low-end devices: skip the sky atmosphere shader
+  if ((navigator.hardwareConcurrency || 8) <= 4 || (navigator.deviceMemory || 8) <= 4) scene.skyAtmosphere.show = false;
   return viewer;
 }
 
@@ -55,4 +57,17 @@ export function mountGlobe(slot) {
 
 export function simDate() {
   return viewer ? window.Cesium.JulianDate.toDate(viewer.clock.currentTime) : new Date();
+}
+
+/** Imagery tile progress, 0..1, for loaders. Calls fn(fraction) until the queue first empties. */
+export function onTiles(fn) {
+  const v = getGlobe();
+  let max = 0, finished = false;
+  const off = v.scene.globe.tileLoadProgressEvent.addEventListener((q) => {
+    if (finished) return;
+    max = Math.max(max, q);
+    fn(max ? 1 - q / max : 0);
+    if (q === 0 && max > 0) { finished = true; fn(1); off(); }
+  });
+  return () => { finished = true; off(); };
 }
