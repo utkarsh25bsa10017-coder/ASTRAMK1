@@ -12,6 +12,7 @@ uniform float uRise;      // 0..1 sunrise progress
 uniform vec2 uMouse;      // -1..1 parallax
 uniform vec2 uCenter;     // planet centre in screen units
 uniform float uRadius;
+uniform float uRot;       // Earth rotation (radians), driven from JS
 uniform sampler2D uDay;
 uniform sampler2D uNight;
 uniform float uHasTex;
@@ -87,7 +88,7 @@ void main(){
     vec3 P = ro + rd * tHit;
     vec3 n = normalize(P - C);
     // Earth frame: tilt + slow rotation; offset so India sits near the dawn limb
-    float rot = uTime * 0.012 + 3.65;
+    float rot = uRot;
     float tilt = 0.41;
     vec3 q = n;
     q = vec3(q.x, q.y * cos(tilt) - q.z * sin(tilt), q.y * sin(tilt) + q.z * cos(tilt));
@@ -146,8 +147,9 @@ void main(){
     col += vec3(1.0, 0.55, 0.25) * 0.018 * smoothstep(0.05, 0.0, length(uv - gp) - 0.015 * float(i)) * rise;
   }
   // glow hugging the limb around the sunrise point
-  vec2 cs = uCenter + par;
-  float limbD = abs(length(uv - cs) - R / 3.0 * 1.55);
+  // (distance of this pixel's ray from the true silhouette, so it stays on the limb at any framing)
+  float tca = dot(C, rd);
+  float limbD = abs(length(C - rd * tca) - R) / length(C) * 1.55;
   col += vec3(1.0, 0.6, 0.3) * exp(-limbD * 90.0) * exp(-length(uv - sp) * 2.2) * 0.9 * rise;
 
   // vignette, tone map, dither
@@ -179,7 +181,7 @@ export function mountEarthHero(container) {
   gl.enableVertexAttribArray(loc);
   gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
   const U = (n) => gl.getUniformLocation(prog, n);
-  const u = { res: U("uRes"), time: U("uTime"), rise: U("uRise"), mouse: U("uMouse"), center: U("uCenter"), radius: U("uRadius"), day: U("uDay"), night: U("uNight"), has: U("uHasTex") };
+  const u = { res: U("uRes"), time: U("uTime"), rise: U("uRise"), mouse: U("uMouse"), center: U("uCenter"), radius: U("uRadius"), rot: U("uRot"), day: U("uDay"), night: U("uNight"), has: U("uHasTex") };
 
   let loaded = 0;
   const tex = (unit, src) => {
@@ -207,6 +209,16 @@ export function mountEarthHero(container) {
   const mouse = [0, 0], target = [0, 0];
   window.addEventListener("pointermove", (e) => { target[0] = (e.clientX / innerWidth) * 2 - 1; target[1] = -((e.clientY / innerHeight) * 2 - 1); }, { passive: true });
 
+  // Scroll story: each chapter moves the planet from a dawn horizon up to a full disc.
+  // [x as a fraction of the aspect ratio, y, radius, sun glare]; wide screens put the planet on the right.
+  const KEYS_WIDE = [[0.18, -2.05, 1.9, 1], [0.27, -1.2, 1.3, 0.85], [0.32, -0.42, 0.98, 0.7], [0.32, -0.12, 0.82, 0.6], [0.32, -0.02, 0.74, 0.55]];
+  const KEYS_TALL = [[0, -2.25, 1.75, 1], [0, -1.95, 1.55, 0.9], [0, -1.75, 1.45, 0.8], [0, -1.65, 1.4, 0.7], [0, -1.6, 1.38, 0.65]];
+  let story = 0, cur = null;
+  // Rotation: free slow spin on the opening screen; in the chapters, turn India (≈80°E) toward the camera
+  const INDIA_ROT = 1.45;
+  let rot = 40 * 0.012 + 3.65, lastT = null;
+  const wrapPi = (a) => a - 2 * Math.PI * Math.round(a / (2 * Math.PI));
+
   const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
   let raf = 0, running = true, t0 = performance.now(), visible = true;
   const resize = () => {
@@ -227,13 +239,23 @@ export function mountEarthHero(container) {
     mouse[0] += (target[0] - mouse[0]) * 0.03; mouse[1] += (target[1] - mouse[1]) * 0.03;
     // planet: large, low and to the right on wide screens; centred lower on tall screens
     const wide = aspect > 1.2;
+    const k = (wide ? KEYS_WIDE : KEYS_TALL)[story];
+    const want = [k[0] * (wide ? aspect : 1), k[1], k[2], k[3]];
+    if (!cur || reduced) cur = want.slice();
+    else for (let i = 0; i < 4; i++) cur[i] += (want[i] - cur[i]) * 0.055;   // ease toward the chapter's framing
     gl.uniform2f(u.res, canvas.width, canvas.height);
     gl.uniform1f(u.time, reduced ? 40 : t + 40);
     const rise = reduced ? 1 : 1 - Math.pow(1 - Math.min(1, t / 7), 3);
-    gl.uniform1f(u.rise, 0.25 + 0.75 * rise);
+    gl.uniform1f(u.rise, (0.25 + 0.75 * rise) * cur[3]);
     gl.uniform2f(u.mouse, mouse[0], mouse[1]);
-    gl.uniform2f(u.center, wide ? aspect * 0.18 : 0.0, wide ? -2.05 : -2.25);
-    gl.uniform1f(u.radius, wide ? 1.9 : 1.75);
+    gl.uniform2f(u.center, cur[0], cur[1]);
+    gl.uniform1f(u.radius, cur[2]);
+    const dt = lastT == null ? 0 : Math.min(0.1, t - lastT);
+    lastT = t;
+    if (reduced) rot = story ? INDIA_ROT : 40 * 0.012 + 3.65;
+    else if (story === 0) rot += dt * 0.012;
+    else rot += wrapPi(INDIA_ROT + t * 0.003 - rot) * Math.min(1, dt * 1.6);
+    gl.uniform1f(u.rot, rot);
     gl.uniform1f(u.has, loaded >= 2 ? 1 : 0);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
   };
@@ -248,5 +270,9 @@ export function mountEarthHero(container) {
   };
   document.addEventListener("visibilitychange", () => { if (!document.hidden && running) loop(); });
   loop();
-  return { stop() { running = false; cancelAnimationFrame(raf); }, start() { if (!running) { running = true; loop(); } } };
+  return {
+    stop() { running = false; cancelAnimationFrame(raf); },
+    start() { if (!running) { running = true; loop(); } },
+    setStory(i) { story = Math.max(0, Math.min(KEYS_WIDE.length - 1, i | 0)); if (reduced) frame(performance.now()); },
+  };
 }

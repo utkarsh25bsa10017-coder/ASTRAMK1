@@ -1,5 +1,5 @@
 import { api } from "../core/api.js";
-import { mountGlobe, simDate, onTiles } from "../core/globe.js";
+import { mountGlobe, simDate, onTiles, smoothZoom } from "../core/globe.js";
 import { satrec, geodeticAt, orbitInfo, ecfAt } from "../core/orbitmath.js";
 import { $, $$, esc, fmtNum, timeAgo, fmtUTC, fmtIST, toast, makeChart } from "../core/util.js";
 import { progressLoader } from "../core/loader.js";
@@ -143,8 +143,17 @@ function initTimebar() {
   $("#t-plus").onclick = (e) => stepSim(e.shiftKey ? 60 : 10);
   $("#btn-now").onclick = () => { t0 = Date.now() - BACK; clearConjFocus(); setSim(Date.now()); setSpeed(1); };
   $$("#timebar [data-speed]").forEach(b => b.onclick = () => { clearConjFocus(); setSpeed(+b.dataset.speed); });
-  $("#z-in").onclick = () => viewer.camera.zoomIn(viewer.camera.positionCartographic.height * 0.3);
-  $("#z-out").onclick = () => viewer.camera.zoomOut(viewer.camera.positionCartographic.height * 0.3);
+  const togglePanels = () => {
+    const bare = $("#view-orbital").classList.toggle("bare");
+    $("#btn-panels").textContent = bare ? "Show panels" : "Hide panels";
+    $("#btn-panels").setAttribute("aria-pressed", String(bare));
+  };
+  $("#btn-panels").onclick = togglePanels;
+  document.addEventListener("keydown", (e) => {
+    if ((e.key === "p" || e.key === "P") && $("#view-orbital").classList.contains("active") && !e.target.closest("input, select, textarea")) togglePanels();
+  });
+  $("#z-in").onclick = () => smoothZoom(0.4);
+  $("#z-out").onclick = () => smoothZoom(-0.4);
   setSpeed(1);
 }
 

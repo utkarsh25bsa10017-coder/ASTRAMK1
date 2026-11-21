@@ -1,7 +1,7 @@
 import { api } from "../core/api.js";
 import { attachSearch, goSafety } from "../core/search.js";
 import { mountEarthHero } from "../core/earth-hero.js";
-import { $, esc, fmtNum, timeAgo, fmtIST, makeChart, PAL, TYPE_ICON, SRC_LABEL } from "../core/util.js";
+import { $, esc, fmtNum, timeAgo, fmtIST, makeChart, PAL, TYPE_ICON, SRC_LABEL, inIndia } from "../core/util.js";
 
 const kpiDefs = [
   { id: "india", l: "Official alerts in India", c: "var(--gold)" },
@@ -28,11 +28,40 @@ function renderLede() {
   if (f.indiaClose != null) parts.push(`<b>${fmtNum(f.indiaClose)}</b> Indian satellites have a close approach this week.`);
   if (f.navicOk != null) parts.push(`<b>${f.navicOk}</b> NavIC satellites at full health.`);
   $("#ov-lede").innerHTML = parts.join(" ");
+  renderStory();
+}
+
+// Live line on each story chapter
+function renderStory() {
+  const f = facts, set = (id, html) => { const el = document.getElementById(id); if (el && html) el.innerHTML = html; };
+  if (f.india != null) set("st-1", `Right now: <b>${fmtNum(f.india)}</b> official alerts across India${f.severe ? `, <b>${fmtNum(f.severe)}</b> severe or extreme` : ""}${f.quakes != null ? `, and <b>${fmtNum(f.quakes)}</b> earthquakes in the past week` : ""}.`);
+  if (f.objects != null) set("st-3", `<b>${fmtNum(f.objects)}</b> objects tracked in orbit, <b>${fmtNum(f.debris)}</b> of them debris${f.indiaClose != null ? `. <b>${fmtNum(f.indiaClose)}</b> Indian satellites have a close approach this week` : ""}.`);
+  if (f.navicOk != null) set("st-4", `<b>${f.navicOk}</b> NavIC satellites at full health today.`);
+}
+
+// Chapter in the middle of the screen drives the Earth's framing and the progress dots
+function initStory() {
+  const view = $("#view-overview"), steps = [...view.querySelectorAll(".story .step")], dots = [...view.querySelectorAll("#story-dots i")];
+  const activate = (i) => {
+    steps.forEach((el, j) => el.classList.toggle("on", j === i));
+    dots.forEach((d, j) => d.classList.toggle("on", j === i));
+    hero?.setStory?.(i);
+  };
+  const io = new IntersectionObserver((es) => {
+    es.forEach(e => { if (e.isIntersecting) activate(+e.target.dataset.step); });
+  }, { root: view, rootMargin: "-45% 0px -45% 0px", threshold: 0 });
+  steps.forEach(el => io.observe(el));
+  activate(0);
+  view.querySelector(".scroll-cue")?.addEventListener("click", (e) => {
+    e.preventDefault();
+    steps[1].scrollIntoView({ behavior: "smooth", block: "center" });
+  });
 }
 
 let hero = null;
 export async function init() {
   try { hero = mountEarthHero(document.getElementById("hero-stage")); } catch (e) { console.warn("hero", e); }
+  initStory();
   $("#kpis").innerHTML = kpiDefs.map(k => `<div class="kpi" data-id="${k.id}" style="--kc:${k.c}"><div class="v">–</div><div class="l">${k.l}</div><div class="s"></div></div>`).join("");
   const s = attachSearch($("#ov-search"), $("#ov-suggest"), goSafety);
   $("#ov-quick").addEventListener("click", (e) => { const b = e.target.closest("[data-q]"); if (b) s.lookup(b.dataset.q); });
@@ -74,7 +103,7 @@ async function loadQuakes() {
   try {
     const d = await api("/api/earthquakes", { ttl: 300_000 });
     const week = Date.now() - 7 * 86400000;
-    const recent = d.events.filter(e => e.india && new Date(e.time) >= week);
+    const recent = d.events.filter(e => inIndia(e.lat, e.lon) && new Date(e.time) >= week);
     const ncs = recent.filter(e => e.source === "ncs");
     facts.quakes = ncs.length || recent.length;
     facts.maxQuake = [...recent].sort((a, b) => b.mag - a.mag)[0];
@@ -86,7 +115,7 @@ async function loadQuakes() {
         <span class="mg" style="color:${e.mag >= 5 ? PAL.crimson : e.mag >= 4 ? PAL.sand : PAL.bone}">${e.mag.toFixed(1)}</span>
         <span class="pl">${esc(e.place)}<span class="src">${e.source}</span><br><span class="muted small">depth ${fmtNum(e.depth)} km</span></span>
         <span class="tm">${timeAgo(e.time)}</span>
-      </li>`).join("") || `<li class="skeleton">No earthquakes in the India region this week.</li>`;
+      </li>`).join("") || `<li class="skeleton">No earthquakes in India this week.</li>`;
     $("#ov-quakes").onclick = (e) => {
       const li = e.target.closest("li[data-lat]");
       if (li) goSafety({ lat: li.dataset.lat, lon: li.dataset.lon, name: li.dataset.name });

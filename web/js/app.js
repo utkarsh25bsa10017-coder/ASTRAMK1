@@ -10,29 +10,52 @@ const vendorReady = new Promise(r => {
   document.addEventListener("DOMContentLoaded", () => haveVendor() && r(), { once: true });
   window.addEventListener("load", r, { once: true });
 });
-vendorReady.then(chartDefaults);
+vendorReady.then(() => {
+  chartDefaults();
+  // Every Leaflet map: quarter-step zoom so wheel, trackpad pinch and touch pinch feel continuous
+  if (window.L) L.Map.mergeOptions({ zoomSnap: 0.25, zoomDelta: 0.5, wheelPxPerZoomLevel: 110, wheelDebounceTime: 20, touchZoom: true, bounceAtZoomLimits: false });
+});
 const NEEDS_VENDOR = new Set(["safety", "disaster", "fleet", "orbital", "navic"]);   // the landing only needs Chart.js, later
 
-// Three workspaces; each remembers the page you were last on.
+// Three workspaces. Ground and Space are dropdowns; the button shows the page you are on.
 const GROUP = { disaster: "ground", safety: "ground", orbital: "space", fleet: "space", navic: "signal" };
-const lastIn = {};
-try { Object.assign(lastIn, JSON.parse(sessionStorage.getItem("astra.lastIn") || "{}")); } catch {}
+const PAGE = { disaster: "Disaster watch", safety: "Safety check", orbital: "Orbital safety", fleet: "Fleet readiness", navic: "NavIC link" };
 function syncNav(name) {
   const g = GROUP[name];
-  if (g) { lastIn[g] = name; try { sessionStorage.setItem("astra.lastIn", JSON.stringify(lastIn)); } catch {} }
   $$(".tabs .grp").forEach(el => {
-    el.classList.toggle("active", el.dataset.grp === g);
-    if (lastIn[el.dataset.grp]) el.querySelector(".grp-l").setAttribute("href", "#" + lastIn[el.dataset.grp]);
+    const on = el.dataset.grp === g;
+    el.classList.toggle("active", on);
+    el.querySelector(".grp-cur").textContent = on ? PAGE[name] : "";
   });
-  // On narrow screens the strip scrolls: keep the open workspace in view
-  const act = $(".tabs .grp.active"), strip = $(".tabs");
-  if (act && strip.scrollWidth > strip.clientWidth) strip.scrollLeft = act.offsetLeft - (strip.clientWidth - act.offsetWidth) / 2;
   $$(".tabs a[data-view]").forEach(a => {
     const on = a.dataset.view === name;
     a.classList.toggle("active", on);
     on ? a.setAttribute("aria-current", "page") : a.removeAttribute("aria-current");
   });
+  closeMenus();
 }
+function closeMenus(except) {
+  $$(".tabs .grp.open").forEach(g => { if (g !== except) { g.classList.remove("open"); g.querySelector(".grp-b").setAttribute("aria-expanded", "false"); } });
+}
+$(".tabs").addEventListener("click", (e) => {
+  const b = e.target.closest("button.grp-b");
+  if (!b) return;
+  const g = b.parentElement, open = !g.classList.contains("open");
+  closeMenus(g);
+  g.classList.toggle("open", open);
+  b.setAttribute("aria-expanded", String(open));
+  if (open) g.querySelector(".grp-menu a.active, .grp-menu a")?.focus({ preventScroll: true });
+});
+document.addEventListener("click", (e) => { if (!e.target.closest(".tabs .grp")) closeMenus(); });
+document.addEventListener("keydown", (e) => {
+  const g = e.target.closest?.(".tabs .grp.open");
+  if (e.key === "Escape") { const o = $(".tabs .grp.open"); closeMenus(); o?.querySelector(".grp-b").focus(); }
+  if (g && (e.key === "ArrowDown" || e.key === "ArrowUp")) {
+    const items = [...g.querySelectorAll(".grp-menu a")], i = items.indexOf(document.activeElement);
+    items[(i + (e.key === "ArrowDown" ? 1 : -1) + items.length) % items.length].focus();
+    e.preventDefault();
+  }
+});
 
 const modules = {
   overview: () => import("./views/overview.js"),

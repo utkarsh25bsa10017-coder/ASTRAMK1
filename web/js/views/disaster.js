@@ -1,5 +1,5 @@
 import { api, emit } from "../core/api.js";
-import { $, $$, esc, fmtNum, timeAgo, fmtUTC, fmtIST, toast, makeChart, SEV_COLOR, SEV_LABEL, TYPE_ICON, SRC_LABEL, inIndiaBox, PAL } from "../core/util.js";
+import { $, $$, esc, fmtNum, timeAgo, fmtUTC, fmtIST, toast, makeChart, SEV_COLOR, SEV_LABEL, TYPE_ICON, SRC_LABEL, inIndia, alertInIndia, PAL } from "../core/util.js";
 import { goSafety } from "../core/search.js";
 
 let map, alertsLayer, focusLayer, caseLayers = [], cycLayer, quakeLayer;
@@ -20,7 +20,8 @@ export async function init() {
       L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}", { maxZoom: 16, pane: "overlayPane" }),
     ]),
     "Satellite (Esri)": L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", { maxZoom: 18, attribution: "Imagery © Esri, Maxar" }),
-    "OpenStreetMap": L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 19, attribution: "© OpenStreetMap contributors" }),
+    // Esri streets: English place names everywhere (the standard OSM style uses each country's local script)
+    "Streets (Esri)": L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}", { maxZoom: 19, attribution: "Basemap © Esri, HERE, Garmin, © OpenStreetMap contributors" }),
   };
   bases["Dark"].addTo(map);
 
@@ -61,7 +62,11 @@ export async function init() {
   map.on("click", (e) => { if (!e.originalEvent._astraHandled) pointAnalysis(e.latlng.lat, e.latlng.lng); });
 
   $("#alert-search").addEventListener("input", (e) => { filt.q = e.target.value.toLowerCase(); renderList(); });
-  $("#india-only").addEventListener("change", (e) => { filt.india = e.target.checked; renderList(); });
+  $("#india-only").addEventListener("change", (e) => {
+    filt.india = e.target.checked;
+    renderList(); drawAlerts();
+    if (filt.india) map.flyToBounds([[6, 68], [36, 97.5]], { duration: 0.9 });
+  });
   $("#btn-case").addEventListener("click", openCasePicker);
   $("#btn-cyclones").addEventListener("click", openCyclonePicker);
   $("#btn-quakes").addEventListener("click", openQuakes);
@@ -122,7 +127,7 @@ function renderChips(sources) {
 
 function visibleAlerts() {
   return alerts.filter(a => filt.sources.has(a.source) && filt.types.has(a.type)
-    && (!filt.india || inIndiaBox(a.lat, a.lon))
+    && (!filt.india || alertInIndia(a))
     && (!filt.q || `${a.title} ${a.area} ${a.agency} ${a.event} ${a.country}`.toLowerCase().includes(filt.q)));
 }
 
@@ -142,7 +147,13 @@ function renderList() {
 
 function drawAlerts() {
   alertsLayer.clearLayers();
-  for (const a of visibleAlerts()) {
+  const vis = visibleAlerts();
+  const n = [0, 0, 0, 0];
+  vis.forEach(a => n[a.severity || 0]++);
+  $("#alert-legend").innerHTML = `<div class="key-h">Alert severity</div>` +
+    [3, 2, 1, 0].map(i => `<div class="row"><span class="dotk" style="--c:${SEV_COLOR[i]}"></span>${SEV_LABEL[i]}<b>${n[i]}</b></div>`).join("") +
+    `<div class="row sub">Larger dot = more severe; earthquakes sized by magnitude</div>`;
+  for (const a of vis) {
     const color = SEV_COLOR[a.severity];
     const radius = a.source === "usgs" ? Math.max(4, (a.mag - 3) * 3) : 4 + a.severity * 2;
     const m = L.circleMarker([a.lat, a.lon], { radius, color, weight: 1.5, fillColor: color, fillOpacity: 0.55 });
@@ -305,6 +316,7 @@ const imdOf = (kt) => IMD.find(([t]) => (kt || 0) >= t);
 async function openCyclonePicker() {
   clearCase();
   quakeLayer.clearLayers();
+  map.flyToBounds([[2, 50], [30, 100]], { duration: 0.9 });   // North Indian Ocean, out of any radar close-up
   const det = $("#detail");
   $("#detail-empty").hidden = true;
   det.hidden = false;
@@ -538,13 +550,13 @@ async function openQuakes() {
     det.innerHTML = `<h3 style="margin-top:0">Seismic</h3><div class="detail-title">Earthquakes · last 30 days</div>
       <p class="note">${Object.entries(st).map(([k, v]) => `${k.toUpperCase()} ${v.status === "ok" ? v.count : "unavailable"}`).join(" · ")}. NCS is India's official bulletin; duplicates across agencies are merged.</p>
       <div class="seg" id="qk-mag"><button data-m="2.5">M2.5+</button><button class="active" data-m="3.5">M3.5+</button><button data-m="4.5">M4.5+</button><button data-m="6">M6+</button></div>
-      <label class="toggle"><input type="checkbox" id="qk-india" checked> India region only</label>
+      <label class="toggle"><input type="checkbox" id="qk-india" checked> India only</label>
       <div class="legend" style="position:static;margin:10px 0"><div class="row"><span class="sw" style="background:${PAL.crimson}"></span>past 24 h</div><div class="row"><span class="sw" style="background:${PAL.sand}"></span>past 7 days</div><div class="row"><span class="sw" style="background:${PAL.brass}"></span>past 30 days · size = magnitude</div></div>
       <ul class="quake-list" id="qk-list"></ul>`;
     let minM = 3.5;
     const draw = () => {
       const india = $("#qk-india").checked;
-      const evs = d.events.filter(e => e.mag >= minM && (!india || e.india));
+      const evs = d.events.filter(e => e.mag >= minM && (!india || inIndia(e.lat, e.lon)));
       quakeLayer.clearLayers();
       const now = Date.now();
       evs.forEach(e => {

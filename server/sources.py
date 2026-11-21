@@ -154,8 +154,11 @@ def _sachet_detail(guid):
     url = f"https://sachet.ndma.gov.in/cap_public_website/FetchXMLFile?identifier={guid}"
     raw, _ = fetch_raw("sachet", f"sachet_cap_{guid}", url, ttl=7 * DAY, timeout=20)
     root = ET.fromstring(raw)
-    info = root.find("cap:info", CAP_NS)
     g = lambda el, tag: (el.findtext(f"cap:{tag}", default="", namespaces=CAP_NS) or "").strip()
+    # A CAP file may carry one <info> per language; the site is English-only, so take the English one
+    infos = root.findall("cap:info", CAP_NS)
+    info = next((i for i in infos if g(i, "language").lower().startswith("en")), None) \
+        or next((i for i in infos if _is_english(g(i, "headline") or g(i, "description"))), infos[0])
     out = {
         "event": g(info, "event"), "severity": g(info, "severity"), "urgency": g(info, "urgency"),
         "certainty": g(info, "certainty"), "effective": g(info, "effective"), "expires": g(info, "expires"),
@@ -408,6 +411,24 @@ def _slim_alert(a):
     return _SLIM[k]
 
 
+def _is_english(text):
+    """True when most letters are Latin script (SACHET also issues alerts in Hindi, Odia, Bengali and others)."""
+    letters = [c for c in text or "" if c.isalpha()]
+    if not letters:
+        return True
+    return sum(c < "\u0250" for c in letters) / len(letters) >= 0.6
+
+
+def _english_only(a):
+    """None for an alert with no English text; otherwise the alert with any non-English fields blanked."""
+    if not _is_english(a.get("title")):
+        return None
+    for k in ("description", "instruction", "area"):
+        if a.get(k) and not _is_english(a[k]):
+            a = {**a, k: ""}
+    return a
+
+
 def alerts():
     def one(name):
         builder, ttl = ALERT_BUILDERS[name]
@@ -421,7 +442,7 @@ def alerts():
         results = list(ex.map(one, ALERT_BUILDERS))
     merged, status = [], {}
     for name, data, st in results:
-        merged.extend(_slim_alert(a) for a in data)
+        merged.extend(_slim_alert(e) for e in map(_english_only, data) if e)
         status[name] = st
     merged.sort(key=lambda a: (-(a["severity"] or 0), a["time"] or ""), reverse=False)
     merged.sort(key=lambda a: a["time"] or "", reverse=True)
