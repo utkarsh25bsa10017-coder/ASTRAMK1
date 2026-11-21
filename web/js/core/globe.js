@@ -24,14 +24,19 @@ export function getGlobe() {
       maximumLevel: 10, credit: "Imagery © Esri, Maxar, Earthstar Geographics",
     });
     const layer = viewer.imageryLayers.addImageryProvider(esri);
-    layer.brightness = 0.75;
-    layer.saturation = 0.8;
+    layer.brightness = 0.62;   // muted, warm imagery so data reads on top
+    layer.saturation = 0.55;
+    layer.contrast = 1.1;
+    layer.hue = 0.04;
   } catch (e) { console.warn("Esri imagery unavailable", e); }
 
   const scene = viewer.scene;
   scene.globe.enableLighting = false;
   scene.globe.showGroundAtmosphere = true;
   scene.skyAtmosphere.show = true;
+  scene.skyAtmosphere.hueShift = -0.05;
+  scene.skyAtmosphere.saturationShift = -0.4;
+  scene.backgroundColor = C.Color.fromCssColorString("#0b0a08");
   scene.fog.enabled = false;
   scene.screenSpaceCameraController.minimumZoomDistance = 1_000_000;
   scene.screenSpaceCameraController.maximumZoomDistance = 250_000_000;

@@ -1,10 +1,11 @@
 import { api, emit } from "../core/api.js";
-import { $, $$, esc, fmtNum, timeAgo, fmtUTC, toast, makeChart, SEV_COLOR, SEV_LABEL, TYPE_ICON, SRC_LABEL, inIndiaBox } from "../core/util.js";
+import { $, $$, esc, fmtNum, timeAgo, fmtUTC, fmtIST, toast, makeChart, SEV_COLOR, SEV_LABEL, TYPE_ICON, SRC_LABEL, inIndiaBox, PAL } from "../core/util.js";
+import { goSafety } from "../core/search.js";
 
-let map, alertsLayer, focusLayer, caseLayers = [], cycLayer;
+let map, alertsLayer, focusLayer, caseLayers = [], cycLayer, quakeLayer;
 let alerts = [];
 let selectedId = null;
-const filt = { sources: new Set(["sachet", "gdacs", "usgs", "eonet"]), types: null, q: "", india: false };
+const filt = { sources: new Set(["sachet", "ncs", "gdacs", "usgs", "eonet"]), types: null, q: "", india: false };
 
 const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
 const twoDaysAgo = new Date(Date.now() - 2 * 86400000).toISOString().slice(0, 10);
@@ -34,6 +35,7 @@ export async function init() {
   alertsLayer = L.layerGroup().addTo(map);
   focusLayer = L.layerGroup().addTo(map);
   cycLayer = L.layerGroup().addTo(map);
+  quakeLayer = L.layerGroup().addTo(map);
 
   const overlays = {
     "<b>Live alerts</b>": alertsLayer,
@@ -62,6 +64,7 @@ export async function init() {
   $("#india-only").addEventListener("change", (e) => { filt.india = e.target.checked; renderList(); });
   $("#btn-case").addEventListener("click", openCasePicker);
   $("#btn-cyclones").addEventListener("click", openCyclonePicker);
+  $("#btn-quakes").addEventListener("click", openQuakes);
   $("#swipe-range").addEventListener("input", updateSwipe);
   map.on("move zoom resize", updateSwipe);
 
@@ -184,11 +187,13 @@ async function selectAlert(a, fly) {
     ${a.description && a.description !== a.title ? `<div class="desc">${esc(a.description)}</div>` : ""}
     ${a.instruction ? `<div class="desc"><b>Advice:</b> ${esc(a.instruction)}</div>` : ""}
     <div style="display:flex;gap:6px;margin:10px 0">
-      <button class="btn warn" id="btn-bcast">Broadcast via NavIC</button>
+      <button class="btn" id="btn-safety">Full safety check →</button>
+      <button class="btn warn" id="btn-bcast">NavIC broadcast</button>
       ${a.url ? `<a class="btn ghost" href="${esc(a.url)}" target="_blank" rel="noopener">Source ↗</a>` : ""}
     </div>
     <div id="wx-block"><p class="muted small">Loading local conditions…</p></div>`;
   $("#btn-bcast").onclick = () => { window.__astraBroadcast = a; emit("broadcast", a); location.hash = "#navic"; };
+  $("#btn-safety").onclick = () => goSafety({ lat: a.lat, lon: a.lon, name: a.area || "" });
   renderWeather(a.lat, a.lon, $("#wx-block"));
 }
 
@@ -217,9 +222,11 @@ function pointAnalysis(lat, lon) {
   const det = $("#detail");
   det.hidden = false;
   const near = alerts.filter(a => Math.hypot(a.lat - lat, a.lon - lon) < 1.5).length;
-  det.innerHTML = `<div class="detail-title">Point analysis</div>
-    <dl class="kv"><dt>Location</dt><dd class="mono">${lat.toFixed(3)}, ${lon.toFixed(3)}</dd><dt>Alerts within ~150 km</dt><dd>${near}</dd></dl>
+  det.innerHTML = `<h3 style="margin-top:0">Point analysis</h3><div class="detail-title">${lat.toFixed(3)}°N, ${lon.toFixed(3)}°E</div>
+    <dl class="kv"><dt>Alerts within ~150 km</dt><dd>${near}</dd></dl>
+    <button class="btn" id="btn-safety">Full safety check →</button>
     <div id="wx-block"><p class="muted small">Loading local conditions…</p></div>`;
+  $("#btn-safety").onclick = () => goSafety({ lat, lon, name: "" });
   renderWeather(lat, lon, $("#wx-block"));
 }
 
@@ -266,21 +273,21 @@ async function renderWeather(lat, lon, el) {
       <p class="note">Open-Meteo: ECMWF/GFS blend forecast, GloFAS v4 river discharge (nearest river cell), marine waves.</p>`;
     if (fc) makeChart($("#ch-rain"), {
       type: "bar",
-      data: { labels: fc.time.map(t => t.slice(5)), datasets: [{ label: "Daily rain (mm)", data: fc.precipitation_sum, backgroundColor: fc.time.map(t => t >= today ? "#4ea8ff" : "#2c4a73"), borderRadius: 2 }] },
+      data: { labels: fc.time.map(t => t.slice(5)), datasets: [{ label: "Daily rain (mm)", data: fc.precipitation_sum, backgroundColor: fc.time.map(t => t >= today ? PAL.water : "rgba(127,168,196,.35)") }] },
       options: { plugins: { legend: { display: true } }, scales: { y: { beginAtZero: true } } },
     });
     if (fl) makeChart($("#ch-river"), {
       type: "line",
       data: { labels: fl.time.map(t => t.slice(5)), datasets: [
-        { label: "Discharge (m³/s)", data: fl.river_discharge, borderColor: "#63d2ff", pointRadius: 0, borderWidth: 1.5, tension: .3 },
-        { label: "Ensemble max", data: fl.river_discharge_max, borderColor: "#ff8a3d", borderDash: [3, 3], pointRadius: 0, borderWidth: 1 },
-        { label: "Ensemble mean", data: fl.river_discharge_mean, borderColor: "#8d9bb5", pointRadius: 0, borderWidth: 1 },
+        { label: "Discharge (m³/s)", data: fl.river_discharge, borderColor: PAL.water, pointRadius: 0, borderWidth: 1.5, tension: .3 },
+        { label: "Ensemble max", data: fl.river_discharge_max, borderColor: PAL.sand, borderDash: [3, 3], pointRadius: 0, borderWidth: 1 },
+        { label: "Ensemble mean", data: fl.river_discharge_mean, borderColor: PAL.bone3, pointRadius: 0, borderWidth: 1 },
       ] },
       options: { scales: { x: { ticks: { maxTicksLimit: 6 } } } },
     });
     if (wav) makeChart($("#ch-wave"), {
       type: "line",
-      data: { labels: wav.time.map(t => t.slice(5)), datasets: [{ label: "Max wave height (m)", data: wav.wave_height_max, borderColor: "#5ee1a8", backgroundColor: "rgba(94,225,168,.15)", fill: true, pointRadius: 0, tension: .3 }] },
+      data: { labels: wav.time.map(t => t.slice(5)), datasets: [{ label: "Max wave height (m)", data: wav.wave_height_max, borderColor: PAL.sage, backgroundColor: "rgba(143,185,150,.15)", fill: true, pointRadius: 0, tension: .3 }] },
       options: { scales: { y: { beginAtZero: true } } },
     });
   } catch (e) {
@@ -290,11 +297,12 @@ async function renderWeather(lat, lon, el) {
 
 // ---------------------------------------------------------------------------
 // Cyclone tracks (IBTrACS + IMD grades)
-const IMD = [[120, "SuCS", "#b04dff"], [90, "ESCS", "#ff4dd2"], [64, "VSCS", "#ff4d6d"], [48, "SCS", "#ff8a3d"], [34, "CS", "#ffc94d"], [17, "D/DD", "#63d2ff"], [0, "Low", "#8d9bb5"]];
+const IMD = [[120, "SuCS", "#b04d8f"], [90, "ESCS", "#cf3a4a"], [64, "VSCS", "#e2603a"], [48, "SCS", "#d9a441"], [34, "CS", "#c2bd62"], [17, "D/DD", "#7fa8c4"], [0, "Low", "#7d7566"]];
 const imdOf = (kt) => IMD.find(([t]) => (kt || 0) >= t);
 
 async function openCyclonePicker() {
   clearCase();
+  quakeLayer.clearLayers();
   const det = $("#detail");
   $("#detail-empty").hidden = true;
   det.hidden = false;
@@ -352,13 +360,14 @@ function s1Url(base, item, params) {
 
 async function openCasePicker() {
   cycLayer.clearLayers();
+  quakeLayer.clearLayers();
   const det = $("#detail");
   $("#detail-empty").hidden = true;
   det.hidden = false;
   det.innerHTML = `<div class="detail-title">Flood mapping from radar</div><p class="muted small">Loading case studies…</p>`;
   const cases = await api("/api/flood/cases", { ttl: 86_400_000 });
   det.innerHTML = `<div class="detail-title">Flood mapping from radar</div>
-    <p class="muted small">Sentinel-1 radar sees through cloud. ASTRA compares a pre-event and post-event scene from the same orbit track. Pixels that turn dark (smooth water) after the event are flagged as <b style="color:#ff3df2">new inundation</b>.</p>
+    <p class="muted small">Sentinel-1 radar sees through cloud. ASTRA compares a pre-event and post-event scene from the same orbit track. Pixels that turn dark (smooth water) after the event are flagged as <b style="color:#f06e46">new inundation</b>.</p>
     <select id="case-sel" aria-label="Case study">${cases.map(c => `<option value="${c.id}">${esc(c.title)}</option>`).join("")}</select>
     <div id="case-body"></div>`;
   $("#case-sel").onchange = (e) => loadCase(e.target.value);
@@ -387,7 +396,7 @@ async function loadCase(id) {
     const ld = new Date(c.landfall);
     const s = new Date(ld - 10 * 86400000).toISOString().slice(0, 10), e = new Date(+ld + 10 * 86400000).toISOString().slice(0, 10);
     api(`/api/weather/archive?lat=${c.center[0]}&lon=${c.center[1]}&start=${s}&end=${e}`, { ttl: 86_400_000 }).then(w => {
-      makeChart($("#ch-case-rain"), { type: "bar", data: { labels: w.daily.time.map(t => t.slice(5)), datasets: [{ label: "Daily rain at case centre (mm, ERA5)", data: w.daily.precipitation_sum, backgroundColor: "#4ea8ff", borderRadius: 2 }] }, options: { scales: { y: { beginAtZero: true } } } });
+      makeChart($("#ch-case-rain"), { type: "bar", data: { labels: w.daily.time.map(t => t.slice(5)), datasets: [{ label: "Daily rain at case centre (mm, ERA5)", data: w.daily.precipitation_sum, backgroundColor: PAL.water }] }, options: { scales: { y: { beginAtZero: true } } } });
     }).catch(() => {});
   } catch (e) {
     body.innerHTML = `<p class="muted">Case unavailable: ${esc(e.message)}</p>`;
@@ -421,7 +430,7 @@ function showPair(c, p) {
   $("#swipe").hidden = false;
   $("#swipe-before").textContent = `◀ Before ${p.beforeDate.slice(0, 10)}`;
   $("#swipe-after").textContent = `After ${p.afterDate.slice(0, 10)} ▶`;
-  $("#dmap-legend").innerHTML = `<div class="row"><span class="sw" style="background:#ff3df2"></span>New inundation (water after, land before)</div><div class="row"><span class="sw" style="background:#2f7bff"></span>Permanent water (both dates)</div><div class="row muted">Radar © ESA Copernicus</div>`;
+  $("#dmap-legend").innerHTML = `<div class="row"><span class="sw" style="background:#f06e46"></span>New inundation (water after, land before)</div><div class="row"><span class="sw" style="background:#5a8caf"></span>Permanent water (both dates)</div><div class="row muted">Radar © ESA Copernicus</div>`;
   map.flyTo(c.center, 10, { duration: 1 });
   updateSwipe();
 }
@@ -466,7 +475,7 @@ function floodDiffLayer(base, beforeId, afterId, opts) {
           valid++;
           const bw = B[i] > 128, aw = A[i] > 128;
           if (aw && !bw) neu[p] = 1;
-          else if (aw && bw) { O[i] = 47; O[i + 1] = 123; O[i + 2] = 255; O[i + 3] = 150; }
+          else if (aw && bw) { O[i] = 90; O[i + 1] = 140; O[i + 2] = 175; O[i + 3] = 150; }
         }
         // 3x3 majority filter to suppress radar speckle
         let count = 0;
@@ -475,7 +484,7 @@ function floodDiffLayer(base, beforeId, afterId, opts) {
           if (!neu[p]) continue;
           let n = 0;
           for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) n += neu[p + dy * 256 + dx];
-          if (n >= 5) { const i = p * 4; O[i] = 255; O[i + 1] = 61; O[i + 2] = 242; O[i + 3] = 220; count++; }
+          if (n >= 5) { const i = p * 4; O[i] = 240; O[i + 1] = 110; O[i + 2] = 70; O[i + 3] = 235; count++; }
         }
         ctx.putImageData(out, 0, 0);
         const lat = tile2lat(coords.y + 0.5, coords.z);
@@ -510,4 +519,59 @@ function floodDiffLayer(base, beforeId, afterId, opts) {
 function tile2lat(y, z) {
   const n = Math.PI - (2 * Math.PI * y) / Math.pow(2, z);
   return (180 / Math.PI) * Math.atan(0.5 * (Math.exp(n) - Math.exp(-n)));
+}
+
+// ---------------------------------------------------------------------------
+// Earthquakes: NCS (official India) + EMSC + USGS, merged and de-duplicated server-side
+async function openQuakes() {
+  clearCase();
+  cycLayer.clearLayers();
+  const det = $("#detail");
+  $("#detail-empty").hidden = true;
+  det.hidden = false;
+  det.innerHTML = `<h3 style="margin-top:0">Seismic</h3><div class="detail-title">Earthquakes · last 30 days</div><p class="loading-line">Reading NCS, EMSC and USGS</p>`;
+  try {
+    const d = await api("/api/earthquakes", { ttl: 300_000 });
+    const st = d.sources;
+    det.innerHTML = `<h3 style="margin-top:0">Seismic</h3><div class="detail-title">Earthquakes · last 30 days</div>
+      <p class="note">${Object.entries(st).map(([k, v]) => `${k.toUpperCase()} ${v.status === "ok" ? v.count : "unavailable"}`).join(" · ")}. NCS is India's official bulletin; duplicates across agencies are merged.</p>
+      <div class="seg" id="qk-mag"><button data-m="2.5">M2.5+</button><button class="active" data-m="3.5">M3.5+</button><button data-m="4.5">M4.5+</button><button data-m="6">M6+</button></div>
+      <label class="toggle"><input type="checkbox" id="qk-india" checked> India region only</label>
+      <div class="legend" style="position:static;margin:10px 0"><div class="row"><span class="sw" style="background:${PAL.crimson}"></span>past 24 h</div><div class="row"><span class="sw" style="background:${PAL.sand}"></span>past 7 days</div><div class="row"><span class="sw" style="background:${PAL.brass}"></span>past 30 days · size = magnitude</div></div>
+      <ul class="quake-list" id="qk-list"></ul>`;
+    let minM = 3.5;
+    const draw = () => {
+      const india = $("#qk-india").checked;
+      const evs = d.events.filter(e => e.mag >= minM && (!india || e.india));
+      quakeLayer.clearLayers();
+      const now = Date.now();
+      evs.forEach(e => {
+        const age = (now - new Date(e.time)) / 3600000;
+        const col = age < 24 ? PAL.crimson : age < 168 ? PAL.sand : PAL.brass;
+        L.circleMarker([e.lat, e.lon], { radius: Math.max(3, (e.mag - 2) * 3.2), color: col, weight: 1.2, fillColor: col, fillOpacity: age < 24 ? .55 : .25 })
+          .bindTooltip(`M${e.mag.toFixed(1)} · ${esc(e.place)}<br><span style="opacity:.7">${fmtIST(e.time)} · depth ${fmtNum(e.depth)} km · ${e.source.toUpperCase()}${e.also ? " + " + e.also.join(", ").toUpperCase() : ""}</span>`)
+          .on("click", (ev) => { ev.originalEvent._astraHandled = true; goSafety({ lat: e.lat, lon: e.lon, name: e.place }); })
+          .addTo(quakeLayer);
+      });
+      $("#qk-list").innerHTML = evs.slice(0, 120).map((e, i) => `<li data-i="${i}">
+          <span class="mg" style="color:${e.mag >= 5 ? PAL.crimson : e.mag >= 4 ? PAL.sand : PAL.bone}">${e.mag.toFixed(1)}</span>
+          <span class="pl">${esc(e.place)}<span class="src">${e.source}</span>${e.tsunami ? ' <span class="src" style="color:var(--crimson)">tsunami flag</span>' : ""}<br><span class="muted small">depth ${fmtNum(e.depth)} km</span></span>
+          <span class="tm">${timeAgo(e.time)}</span></li>`).join("") || `<li class="skeleton">No events at this threshold.</li>`;
+      $("#qk-list").onclick = (ev) => {
+        const li = ev.target.closest("li[data-i]"); if (!li) return;
+        const e = evs[+li.dataset.i];
+        map.flyTo([e.lat, e.lon], 7, { duration: .8 });
+      };
+    };
+    $("#qk-mag").onclick = (ev) => {
+      const b = ev.target.closest("[data-m]"); if (!b) return;
+      $("#qk-mag").querySelectorAll("button").forEach(x => x.classList.toggle("active", x === b));
+      minM = +b.dataset.m; draw();
+    };
+    $("#qk-india").onchange = draw;
+    draw();
+    map.flyTo([23, 82], 4, { duration: .8 });
+  } catch (e) {
+    det.innerHTML += `<p class="muted">Earthquake feeds unavailable: ${esc(e.message)}</p>`;
+  }
 }

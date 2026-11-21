@@ -18,7 +18,7 @@ async function render() {
         : h.last_status === "ok" ? `<span class="prov live">ok</span>`
         : h.last_status === "cache" ? `<span class="prov cache">cached</span>` : `<span class="prov error">error</span>`;
       const meta = direct ? "Loaded by the browser as map layers" : h ? `${h.last_ms != null ? h.last_ms + " ms" : ""}${h.last_bytes ? " · " + fmtNum(h.last_bytes / 1024) + " KB" : ""} · ${timeAgo(new Date(h.last_time * 1000))}${h.cooldown_s ? ` · retry in ${Math.ceil(h.cooldown_s / 60)} min` : ""}${h.last_status === "error" ? `<br><span class="small" style="color:var(--danger)">${esc(h.last_detail)}</span>` : ""}` : "";
-      return `<tr><td>${esc(s.name)}<div class="small muted">${esc(s.provider)}</div></td>
+      return `<tr><td><b>${esc(s.name)}</b><span class="small muted">${esc(s.provider)}</span></td>
         <td><span class="badge">${esc(s.domain)}</span></td>
         <td>${esc(s.use)}</td>
         <td>${status}<div class="small muted">${meta}</div></td>

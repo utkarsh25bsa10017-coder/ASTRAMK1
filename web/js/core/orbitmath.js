@@ -100,4 +100,4 @@ export function groundTrack(rec, start, hours = 24, stepMin = 10) {
   return pts;
 }
 
-export const dopQuality = p => p == null ? ["No fix", "#ff4d6d"] : p < 2 ? ["Excellent", "#3ddc97"] : p < 4 ? ["Good", "#9be15d"] : p < 6 ? ["Moderate", "#ffc94d"] : p < 10 ? ["Poor", "#ff8a3d"] : ["Very poor", "#ff4d6d"];
+export const dopQuality = p => p == null ? ["No fix", "#cf3a4a"] : p < 2 ? ["Excellent", "#8fb996"] : p < 4 ? ["Good", "#c2bd62"] : p < 6 ? ["Moderate", "#d9a441"] : p < 10 ? ["Poor", "#e2603a"] : ["Very poor", "#cf3a4a"];

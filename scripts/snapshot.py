@@ -16,7 +16,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 CACHE, SNAP = ROOT / "data" / "cache", ROOT / "data" / "snapshots"
-ENDPOINTS = ["/api/alerts", "/api/catalog/stats", "/api/catalog/orbits", "/api/conjunctions", "/api/spaceweather",
+ENDPOINTS = ["/api/alerts", "/api/earthquakes", "/api/catalog/stats", "/api/catalog/orbits", "/api/conjunctions", "/api/spaceweather",
              "/api/orbits/gnss", "/api/orbits/gps", "/api/cyclones", "/api/flood/case/dana-2024",
              "/api/flood/case/assam-2024", "/api/flood/case/wayanad-2024"]
 
@@ -37,7 +37,7 @@ def main():
     n = 0
     for f in sorted(CACHE.glob("api_*.json")):
         name = f.name[4:]
-        if name.startswith(("weather_", "wx_arch_", "gdacs_geom_")):
+        if name.startswith(("weather_", "wx_arch_", "gdacs_geom_", "assess_", "geocode_")):
             continue  # per-point/per-event results: not useful as global snapshots
         try:
             json.loads(f.read_text())

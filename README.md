@@ -29,10 +29,34 @@ python3 scripts/snapshot.py --warm
 
 This freezes every feed into `data/snapshots/`. If a source is unreachable during the demo, the server serves the last good copy and the UI marks it with a `stale` or `snapshot` badge.
 
+## Design: the "Yantra" language
+
+ASTRA's visual identity follows our first version's editorial style (serif display type, mono metadata, hairline grid) and roots it in Indian astronomy. The graduated stone instruments of **Jantar Mantar** inspire the signature elements:
+- **Palette:** ink and bone, with a *red-sandstone* signal colour and *instrument-brass* scales. It's warm on purpose, to stand apart from the usual navy-and-neon space dashboard.
+- **Graduated scales:** tick rulers under the navigation bar, on the hazard bars and on the progress bars.
+- **Samrat Yantra dial:** the safety rating is read like a sundial, with a gnomon over a graduated arc.
+- **Type:** Instrument Serif (display), Instrument Sans (text), JetBrains Mono (data). All three are self-hosted under the SIL Open Font License, so the site works offline.
+
 ## What it does
 
-### Mission Control
-Headline numbers (Indian alerts, severe global events, objects in orbit, debris, close approaches, NavIC health), the top alerts, the closest predicted approaches, and space weather.
+### Safety Check (location hazard model)
+Search any place (or click any map) to get a **safety rating (A–E, 0–100)** and five hazard scores, each computed for **the next 72 hours** (live forecast) and for **a 1-in-10-year monsoon storm**:
+
+| Hazard | Physics in the model |
+|---|---|
+| River discharge flood | GloFAS daily discharge 1984–present → Gumbel fit to annual maxima → 2/5/10/20/50/100-yr flood levels; forecast peak return period × site exposure (height above lowest ground within 9 km, a HAND proxy) × river size |
+| Bank overflow & runoff | SCS curve-number runoff from the heaviest 24 h of rain (curve number from soil saturation and slope), amplified on flat, low-lying ground; plus overbank spill when the river is above bankfull (2-yr) level |
+| Sediment & debris flow | Heavy, saturating rain × local slope (Horn's method on a 200 m DEM grid) × surrounding relief |
+| Flash flood | Peak 1 h / 3 h rain intensity × catchment relief × valley-floor position × soil saturation |
+| Earthquake | Distance- and depth-attenuated load from every USGS M4.5+ quake within 300 km since 1975 |
+
+Inputs: Copernicus GLO-90 DEM, GloFAS v4, ECMWF/GFS forecast with soil moisture, ERA5 1995–2024 rainfall (design storm), and USGS (all through Open-Meteo or USGS, free). Rating: combined = top hazard + 0.15 × the next two; safety = 100 − max(combined now, 0.7 × combined design). The page shows a terrain cross-section, the river forecast against its flood levels, hourly rain, nearby earthquakes, plain-language advice, and the full method.
+
+### Earthquakes
+**NCS** (National Center for Seismology, India's official bulletin, parsed from its public RISEQ page), **EMSC** and **USGS**, merged with cross-agency duplicates removed. They appear in the alert feed, the Briefing page, a dedicated seismic map mode in Disaster Watch, and every Safety Check.
+
+### Briefing (front page)
+A live editorial summary, place search, headline numbers, the top alerts, recent earthquakes, the closest orbital approaches, NavIC health and space weather.
 
 ### Disaster Watch
 - **Live alerts** from NDMA **SACHET** (official Indian CAP alerts from IMD, CWC and SDMAs, with alert polygons), **GDACS**, **USGS** and **NASA EONET**, with filters by source, hazard type, India region and text search.
@@ -63,6 +87,9 @@ Every source with its provider, purpose, licence, and live fetch health (latency
 | Source | Provider | Used for |
 |---|---|---|
 | SACHET CAP feed | NDMA, Govt. of India | Official Indian alerts and polygons |
+| NCS RISEQ bulletin | National Center for Seismology, MoES | Official Indian earthquakes |
+| EMSC FDSN | European-Mediterranean Seismological Centre | Low-magnitude regional earthquakes |
+| Open-Meteo elevation / geocoding, Nominatim | Copernicus DEM, GeoNames, OSM | Terrain for the hydrology model, place search |
 | GDACS API | EC JRC / UN OCHA | Global events, cyclone tracks and wind swaths |
 | USGS GeoJSON | U.S. Geological Survey | Earthquakes |
 | NASA EONET | NASA | Wildfires, storms, volcanoes |

@@ -22,6 +22,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import gateway  # noqa: E402
 import sources  # noqa: E402
+import hazard  # noqa: E402
 
 WEB_DIR = gateway.ROOT / "web"
 
@@ -33,7 +34,9 @@ def _q(qs, name, default=None):
 
 CACHE_PREFIX = {"sachet_": "sachet", "gdacs_": "gdacs", "usgs_": "usgs", "eonet_": "eonet", "om_": "openmeteo",
                 "ibtracs_": "ibtracs", "s1_": "planetary", "satcat_": "satcat", "socrates_": "socrates",
-                "gp_": "celestrak", "tlebak_": "tle-backup", "satnogs_": "satnogs", "swpc_": "swpc"}
+                "gp_": "celestrak", "tlebak_": "tle-backup", "satnogs_": "satnogs", "swpc_": "swpc",
+                "ncs_": "ncs", "emsc_": "emsc", "geo_": "geocode", "rev_": "geocode", "elev_": "openmeteo",
+                "glofas_": "openmeteo", "hz_wx_": "openmeteo"}
 
 
 def _health_with_cache():
@@ -81,6 +84,12 @@ def route(path: str, qs: dict):
         return sources.conjunctions()
     if p == "/api/spaceweather":
         return sources.spaceweather()
+    if p == "/api/earthquakes":
+        return hazard.earthquakes()
+    if p == "/api/geocode":
+        return hazard.geocode(_q(qs, "q", ""))
+    if p == "/api/assess":
+        return hazard.assess(_q(qs, "lat"), _q(qs, "lon"))
     if p == "/api/gateway":
         return {"sources": sources.registry(), "health": _health_with_cache()}, "live"
     raise KeyError(p)
@@ -138,7 +147,7 @@ class Handler(SimpleHTTPRequestHandler):
 
 def warm():
     """Prefetch slow sources in the background so the first page load is fast."""
-    jobs = [sources.alerts, sources.catalog_stats, sources.conjunctions, sources.spaceweather,
+    jobs = [sources.alerts, hazard.earthquakes, sources.catalog_stats, sources.conjunctions, sources.spaceweather,
             sources.catalog_orbits, lambda: sources.orbit_set("gnss"), lambda: sources.orbit_set("gps"),
             sources.cyclones, lambda: sources.flood_case("dana-2024")]
 

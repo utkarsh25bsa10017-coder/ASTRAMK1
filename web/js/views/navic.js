@@ -28,8 +28,8 @@ export async function init() {
   on("broadcast", (a) => preselect(a));
 
   pdopMap = L.map("pdop-map", { center: [15, 82], zoom: 2, zoomControl: false, attributionControl: false, worldCopyJump: true });
-  L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}", { maxZoom: 10 }).addTo(pdopMap);
-  L.rectangle([[-30, 30], [50, 130]], { color: "#ff9f1c", weight: 1.5, fill: false, dashArray: "5 4" }).bindTooltip("NavIC extended service area (30°S–50°N, 30°E–130°E)").addTo(pdopMap);
+  L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}", { maxZoom: 10, attribution: "Esri" }).addTo(pdopMap);
+  L.rectangle([[-30, 30], [50, 130]], { color: "#c9a34e", weight: 1.5, fill: false, dashArray: "5 4" }).bindTooltip("NavIC extended service area (30°S–50°N, 30°E–130°E)").addTo(pdopMap);
 
   await loadOrbits();
   loadAlerts();
@@ -40,7 +40,7 @@ export function show() {
   viewer = mountGlobe($("#navic-globe-slot"));
   entities.forEach(e => e.show = true);
   setTimeout(() => pdopMap.invalidateSize(), 60);
-  viewer.camera.flyTo({ destination: C().Cartesian3.fromDegrees(82, 12, 95_000_000), duration: 1.2 });
+  viewer.camera.flyTo({ destination: C().Cartesian3.fromDegrees(82, 12, 72_000_000), duration: 1.2 });
   viewer.clock.currentTime = C().JulianDate.now();
   viewer.clock.multiplier = 1;
   viewer.clock.shouldAnimate = true;
@@ -91,7 +91,7 @@ function buildGlobe() {
   entities = [];
   const now = new Date();
   for (const s of navic) {
-    const col = C().Color.fromCssColorString(s.stuck || s.status === "-" ? "#6b7690" : s.status === "+" ? "#ff9f1c" : "#ffc94d");
+    const col = C().Color.fromCssColorString(s.stuck || s.status === "-" ? "#5b554a" : s.status === "+" ? "#f29a2e" : "#d9a441");
     const track = groundTrack(s.rec, now, 24, 15);
     if (!s.stuck) entities.push(viewer.entities.add({
       polyline: { positions: track.map(p => C().Cartesian3.fromDegrees(p.lon, p.lat, 0)), width: 1.5, material: col.withAlpha(0.6), arcType: C().ArcType.GEODESIC },
@@ -102,18 +102,18 @@ function buildGlobe() {
         return f ? new (C().Cartesian3)(f.x * 1000, f.y * 1000, f.z * 1000) : undefined;
       }, false),
       point: { pixelSize: 9, color: col, outlineColor: C().Color.WHITE, outlineWidth: 1 },
-      label: { text: s.name, font: "12px sans-serif", fillColor: C().Color.WHITE, pixelOffset: new (C().Cartesian2)(0, -16), showBackground: true, backgroundColor: C().Color.fromCssColorString("rgba(12,19,34,.75)"), scale: 0.9 },
+      label: { text: s.name, font: "11px JetBrains Mono, monospace", fillColor: C().Color.WHITE, pixelOffset: new (C().Cartesian2)(0, -16), showBackground: true, backgroundColor: C().Color.fromCssColorString("rgba(17,15,12,.8)"), scale: 0.9 },
     });
     s.entity = ent;
     entities.push(ent);
   }
   // Extended service area outline
   entities.push(viewer.entities.add({
-    rectangle: { coordinates: C().Rectangle.fromDegrees(30, -30, 130, 50), material: C().Color.fromCssColorString("#ff9f1c").withAlpha(0.06), outline: true, outlineColor: C().Color.fromCssColorString("#ff9f1c"), height: 0 },
+    rectangle: { coordinates: C().Rectangle.fromDegrees(30, -30, 130, 50), material: C().Color.fromCssColorString("#f29a2e").withAlpha(0.05), outline: true, outlineColor: C().Color.fromCssColorString("#c9a34e"), height: 0 },
   }));
   const obsEnt = viewer.entities.add({
     position: new (C().CallbackProperty)(() => C().Cartesian3.fromDegrees(obsLon, obsLat), false),
-    point: { pixelSize: 8, color: C().Color.fromCssColorString("#63d2ff"), outlineColor: C().Color.WHITE, outlineWidth: 2 },
+    point: { pixelSize: 8, color: C().Color.fromCssColorString("#ede6d8"), outlineColor: C().Color.WHITE, outlineWidth: 2 },
   });
   entities.push(obsEnt);
   if (!active) entities.forEach(e => e.show = false);
@@ -144,13 +144,13 @@ function refresh() {
   const nUse = nl.filter(x => x.el >= MASK && usable(x.s));
   const gUse = gl.filter(x => x.el >= MASK);
   const cards = [
-    ["NavIC only", dop(nUse), nUse.length, "var(--navic)"],
+    ["NavIC only", dop(nUse), nUse.length, "var(--saffron)"],
     ["GPS only", dop(gUse), gUse.length, "var(--gps)"],
-    ["NavIC + GPS", dop([...nUse, ...gUse]), nUse.length + gUse.length, "var(--accent)"],
+    ["NavIC + GPS", dop([...nUse, ...gUse]), nUse.length + gUse.length, "var(--brass)"],
   ];
   $("#dop-cards").innerHTML = cards.map(([h, d, n, c]) => {
     const [q, qc] = dopQuality(d?.pdop);
-    return `<div class="dop-card" style="border-top:2px solid ${c}"><div class="h">${h}</div>
+    return `<div class="dop-card" style="box-shadow:inset 0 2px 0 ${c}"><div class="h">${h}</div>
       <div class="v" style="color:${qc}">${d ? d.pdop.toFixed(1) : "–"}</div>
       <div class="s">PDOP · ${q} · ${n} satellites used${d ? ` · HDOP ${d.hdop.toFixed(1)} · VDOP ${d.vdop.toFixed(1)}` : n < 4 ? " (need ≥ 4)" : ""}</div></div>`;
   }).join("");
@@ -166,7 +166,7 @@ function drawSky(nl, gl) {
   ctx.scale(dpr, dpr);
   const cx = W / 2, cy = W / 2, R = W / 2 - 18;
   ctx.clearRect(0, 0, W, W);
-  ctx.strokeStyle = "rgba(141,155,181,.25)"; ctx.fillStyle = "#8d9bb5"; ctx.font = "10px sans-serif"; ctx.textAlign = "center";
+  ctx.strokeStyle = "rgba(237,230,216,.16)"; ctx.fillStyle = "rgba(237,230,216,.45)"; ctx.font = "10px JetBrains Mono, monospace"; ctx.textAlign = "center";
   for (const e of [0, 30, 60]) { ctx.beginPath(); ctx.arc(cx, cy, R * (90 - e) / 90, 0, Math.PI * 2); ctx.stroke(); }
   ctx.setLineDash([3, 3]); ctx.beginPath(); ctx.arc(cx, cy, R * (90 - MASK) / 90, 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]);
   for (let a = 0; a < 360; a += 45) { const r = a * Math.PI / 180; ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(cx + R * Math.sin(r), cy - R * Math.cos(r)); ctx.stroke(); }
@@ -176,12 +176,12 @@ function drawSky(nl, gl) {
     const r = R * (90 - el) / 90, a = az * Math.PI / 180;
     const x = cx + r * Math.sin(a), y = cy - r * Math.cos(a);
     const on = el >= MASK && (labels ? usable(s) : true);
-    ctx.fillStyle = on ? color : "#4a5670";
+    ctx.fillStyle = on ? color : "#4b463c";
     ctx.beginPath(); ctx.arc(x, y, labels ? 6 : 4, 0, Math.PI * 2); ctx.fill();
-    if (labels) { ctx.fillStyle = "#e6edf7"; ctx.fillText(s.name.replace("IRNSS-", ""), x, y - 9); }
+    if (labels) { ctx.fillStyle = "#ede6d8"; ctx.fillText(s.name.replace("IRNSS-", ""), x, y - 9); }
   });
-  plot(gl, "#4ea8ff", false);
-  plot(nl, "#ff9f1c", true);
+  plot(gl, "#7fa8c4", false);
+  plot(nl, "#f29a2e", true);
 }
 
 // ---------------------------------------------------------------------------
@@ -203,7 +203,7 @@ function drawPdop() {
       L.rectangle([[lat, lon], [lat + step, lon + step]], { renderer, stroke: false, fillColor: color, fillOpacity: d ? 0.45 : 0.25, interactive: false }).addTo(pdopLayer);
     }
   }
-  L.circleMarker([obsLat, obsLon], { radius: 4, color: "#fff", weight: 2, fillColor: "#63d2ff", fillOpacity: 1 }).addTo(pdopLayer);
+  L.circleMarker([obsLat, obsLon], { radius: 4, color: "#ede6d8", weight: 2, fillColor: "#e2603a", fillOpacity: 1 }).addTo(pdopLayer);
 }
 
 function locate() {

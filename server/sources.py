@@ -26,6 +26,15 @@ REGISTRY = [
     ("sachet", "SACHET CAP alerts", "NDMA, Govt. of India", "Disaster",
      "Official Indian disaster alerts (IMD, CWC, SDMAs) with alert polygons",
      "https://sachet.ndma.gov.in/cap_public_website/rss/rss_india.xml", "Public domain"),
+    ("ncs", "NCS earthquakes", "National Center for Seismology, MoES", "Disaster",
+     "Official Indian earthquake bulletin (all magnitudes, past year), parsed from the public RISEQ page",
+     "https://riseq.seismo.gov.in/riseq/earthquake/recent_earthquake", "Public bulletin"),
+    ("emsc", "EMSC seismic portal", "European-Mediterranean Seismological Centre", "Disaster",
+     "Real-time low-magnitude earthquakes for South Asia (FDSN)",
+     "https://www.seismicportal.eu/fdsnws/event/1/query?format=json&limit=10", "Free, attribution"),
+    ("geocode", "Place search", "Open-Meteo geocoding (GeoNames) + OSM Nominatim", "Disaster",
+     "Location search and reverse lookup for the safety check",
+     "https://geocoding-api.open-meteo.com/v1/search?name=Puri", "CC-BY 4.0 / ODbL"),
     ("gdacs", "GDACS events", "EC JRC / UN OCHA", "Disaster",
      "Global cyclones, floods, earthquakes, volcanoes, wildfires, droughts with alert levels",
      "https://www.gdacs.org/gdacsapi/api/events/geteventlist/SEARCH?eventlist=TC", "Free, attribution"),
@@ -35,8 +44,8 @@ REGISTRY = [
     ("eonet", "NASA EONET", "NASA", "Disaster",
      "Open natural events: wildfires, storms, volcanoes, floods",
      "https://eonet.gsfc.nasa.gov/api/v3/events/geojson?status=open&days=30", "Public domain"),
-    ("openmeteo", "Open-Meteo forecast / flood / marine", "Open-Meteo (ECMWF, GloFAS, DWD...)", "Disaster",
-     "Rainfall forecast, GloFAS river discharge, wave height for any point",
+    ("openmeteo", "Open-Meteo forecast / flood / elevation", "Open-Meteo (ECMWF, GloFAS v4, Copernicus DEM)", "Disaster",
+     "Rain & soil-moisture forecast, GloFAS discharge since 1984, DEM terrain for the hydrology model",
      "https://api.open-meteo.com/v1/forecast?latitude=20.3&longitude=85.8&hourly=precipitation", "CC-BY 4.0, non-commercial free"),
     ("ibtracs", "IBTrACS North Indian Ocean", "NOAA NCEI", "Disaster",
      "Historical cyclone best tracks (incl. IMD New Delhi data)",
@@ -334,7 +343,25 @@ def _build_eonet():
     return out, prov
 
 
-ALERT_BUILDERS = {"sachet": (_build_sachet, 10 * MIN), "gdacs": (_build_gdacs, 15 * MIN),
+def _build_ncs():
+    import hazard  # local import avoids a cycle
+    ev, prov = hazard._ncs_events()
+    cutoff = _now() - timedelta(days=7)
+    out = []
+    for e in ev:
+        t = _parse_dt(e["time"])
+        if not t or t < cutoff or e["mag"] < 3.0:
+            continue
+        m = e["mag"]
+        out.append({"id": f"ncs-{e['time']}-{e['lat']}", "source": "ncs", "type": "earthquake", "event": "Earthquake",
+                    "title": f"M{m:.1f} earthquake · {e['place']}", "description": f"Magnitude {m}, depth {e['depth']:.0f} km. Region: {e['region']}.",
+                    "severity": 3 if m >= 7 else 2 if m >= 6 else 1 if m >= 4.5 else 0, "severityText": f"M{m:.1f}",
+                    "agency": "NCS (MoES)", "area": e["region"], "country": "India", "time": e["time"],
+                    "lat": e["lat"], "lon": e["lon"], "url": e["url"], "mag": m})
+    return out, prov
+
+
+ALERT_BUILDERS = {"sachet": (_build_sachet, 10 * MIN), "ncs": (_build_ncs, 10 * MIN), "gdacs": (_build_gdacs, 15 * MIN),
                   "usgs": (_build_usgs, 5 * MIN), "eonet": (_build_eonet, 30 * MIN)}
 
 
@@ -347,7 +374,7 @@ def alerts():
         except SourceUnavailable as e:
             return name, [], {"status": "error", "error": str(e)[:200], "count": 0}
 
-    with ThreadPoolExecutor(max_workers=4) as ex:
+    with ThreadPoolExecutor(max_workers=5) as ex:
         results = list(ex.map(one, ALERT_BUILDERS))
     merged, status = [], {}
     for name, data, st in results:

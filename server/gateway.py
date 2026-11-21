@@ -13,6 +13,7 @@ import re
 import threading
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 from pathlib import Path
 
@@ -69,9 +70,10 @@ def health() -> dict:
     with _health_lock:
         out = json.loads(json.dumps(_health))
     now = time.time()
-    for src, until in _down_until.items():
+    for bkey, until in _down_until.items():
+        src = bkey.split(":", 1)[0]
         if until > now and src in out:
-            out[src]["cooldown_s"] = round(until - now)
+            out[src]["cooldown_s"] = max(out[src].get("cooldown_s", 0), round(until - now))
     return out
 
 
@@ -99,8 +101,9 @@ def fetch_raw(source: str, key: str, url: str, ttl: float, timeout: float = 30,
                 _health[source] = {"ok": 0, "fail": 0, "last_status": "cache", "last_time": path.stat().st_mtime,
                                    "last_ms": None, "last_detail": "", "last_bytes": path.stat().st_size}
         return path.read_bytes(), "cache"
-    # Circuit breaker: after a failure, don't hammer a down/rate-limiting source.
-    if _down_until.get(source, 0) > time.time():
+    # Circuit breaker (per source + host): after a failure, don't hammer a down/rate-limiting server.
+    bkey = source + ":" + urllib.parse.urlsplit(url).netloc
+    if _down_until.get(bkey, 0) > time.time():
         if path.exists():
             return path.read_bytes(), "stale"
         raise SourceUnavailable(f"{source}: temporarily unreachable (retrying after cool-down)")
@@ -118,8 +121,10 @@ def fetch_raw(source: str, key: str, url: str, ttl: float, timeout: float = 30,
             return body, "live"
         except Exception as e:  # network error, HTTP error, timeout
             _record(source, False, (time.time() - t0) * 1000, f"{type(e).__name__}: {e}")
-            if not (isinstance(e, urllib.error.HTTPError) and e.code in (400, 404)):
-                _down_until[source] = time.time() + COOLDOWN
+            if isinstance(e, urllib.error.HTTPError) and e.code == 429:
+                _down_until[bkey] = time.time() + 90          # rate limited: short back-off
+            elif not (isinstance(e, urllib.error.HTTPError) and e.code in (400, 404)):
+                _down_until[bkey] = time.time() + COOLDOWN
             if path.exists():
                 return path.read_bytes(), "stale"
             raise SourceUnavailable(f"{source}: {e}") from e

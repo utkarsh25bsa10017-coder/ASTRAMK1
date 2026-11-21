@@ -13,16 +13,16 @@ let conjData = null, statsData = null;
 let screenReady = false;
 
 const CATS = {
-  PAY: { label: "Active payloads", color: "#5ee1a8", size: 2.2, on: true },
-  RB: { label: "Rocket bodies", color: "#c792ea", size: 2.4, on: true },
-  DEB: { label: "Debris fragments", color: "#ff5c7a", size: 1.8, on: true },
-  CL0: { label: "Fengyun-1C ASAT debris (2007)", color: "#ffd23f", size: 2.4, on: true },
-  CL1: { label: "Cosmos 2251 collision debris (2009)", color: "#ff8c42", size: 2.4, on: true },
-  CL2: { label: "Iridium 33 collision debris (2009)", color: "#3ee9ff", size: 2.4, on: true },
-  CL3: { label: "Cosmos 1408 ASAT debris (2021)", color: "#ff3df2", size: 2.6, on: true },
-  IND: { label: "Indian objects", color: "#ff9f1c", size: 4, on: true },
-  DEC: { label: "Decaying / re-entry watch", color: "#ffffff", size: 4, on: true },
-  UNK: { label: "Unknown", color: "#8d9bb5", size: 1.6, on: false },
+  PAY: { label: "Active payloads", color: "#8fb996", size: 2.2, on: true },
+  RB: { label: "Rocket bodies", color: "#c9a34e", size: 2.4, on: true },
+  DEB: { label: "Debris fragments", color: "#e2603a", size: 1.8, on: true },
+  CL0: { label: "Fengyun-1C ASAT debris (2007)", color: "#f2d16b", size: 2.4, on: true },
+  CL1: { label: "Cosmos 2251 collision debris (2009)", color: "#f08a5d", size: 2.4, on: true },
+  CL2: { label: "Iridium 33 collision debris (2009)", color: "#7fa8c4", size: 2.4, on: true },
+  CL3: { label: "Cosmos 1408 ASAT debris (2021)", color: "#c25b9b", size: 2.6, on: true },
+  IND: { label: "Indian objects", color: "#f29a2e", size: 4, on: true },
+  DEC: { label: "Decaying / re-entry watch", color: "#ede6d8", size: 4, on: true },
+  UNK: { label: "Unknown", color: "#7d7566", size: 1.6, on: false },
 };
 const TYPE_NAMES = ["Payload", "Rocket body", "Debris", "Unknown"];
 const STATUS = { "+": "Operational", "-": "Non-operational", P: "Partially operational", B: "Backup", S: "Spare", X: "Extended mission", D: "Decayed", "?": "Unknown", "": "Not in catalogue" };
@@ -337,8 +337,8 @@ function jumpToConj(a, b, tca) {
     const missKm = C().Cartesian3.distance(pa, pb) / 1000;
     conjEntity = viewer.entities.add({
       position: pa,
-      polyline: { positions: [pa, pb], width: 3, material: C().Color.fromCssColorString("#ff4d6d") },
-      label: { text: `${sats[ia][1]} × ${sats[ib][1]}\n${missKm < 1 ? (missKm * 1000).toFixed(0) + " m" : missKm.toFixed(2) + " km"} at TCA`, font: "13px sans-serif", fillColor: C().Color.WHITE, showBackground: true, backgroundColor: C().Color.fromCssColorString("rgba(12,19,34,.85)"), pixelOffset: new (C().Cartesian2)(0, -28) },
+      polyline: { positions: [pa, pb], width: 3, material: C().Color.fromCssColorString("#cf3a4a") },
+      label: { text: `${sats[ia][1]} × ${sats[ib][1]}\n${missKm < 1 ? (missKm * 1000).toFixed(0) + " m" : missKm.toFixed(2) + " km"} at TCA`, font: "12px JetBrains Mono, monospace", fillColor: C().Color.WHITE, showBackground: true, backgroundColor: C().Color.fromCssColorString("rgba(17,15,12,.9)"), pixelOffset: new (C().Cartesian2)(0, -28) },
     });
     const g = geodeticAt(ra, t);
     viewer.camera.flyTo({ destination: C().Cartesian3.fromDegrees(g.lon, g.lat, g.alt * 1000 + 2_500_000), duration: 1.4 });
@@ -378,7 +378,7 @@ async function loadStats() {
   try {
     const sw = await api("/api/spaceweather", { ttl: 600_000 });
     const rows = sw.kp.slice(-40);
-    makeChart($("#ch-kp"), { type: "bar", data: { labels: rows.map(r => r.t.slice(5, 13).replace("T", " ")), datasets: [{ label: "Planetary Kp", data: rows.map(r => r.kp), backgroundColor: rows.map(r => r.kp >= 5 ? "#ff4d6d" : r.kp >= 4 ? "#ffc94d" : "#3ddc97") }] }, options: { plugins: { legend: { display: false } }, scales: { y: { min: 0, max: 9 }, x: { ticks: { maxTicksLimit: 5 } } } } });
+    makeChart($("#ch-kp"), { type: "bar", data: { labels: rows.map(r => r.t.slice(5, 13).replace("T", " ")), datasets: [{ label: "Planetary Kp", data: rows.map(r => r.kp), backgroundColor: rows.map(r => r.kp >= 5 ? "#cf3a4a" : r.kp >= 4 ? "#d9a441" : "#c9a34e") }] }, options: { plugins: { legend: { display: false } }, scales: { y: { min: 0, max: 9 }, x: { ticks: { maxTicksLimit: 5 } } } } });
   } catch {}
 }
 
@@ -386,7 +386,7 @@ function drawStatsCharts() {
   const s = statsData;
   const yrs = s.growth.years;
   const from = yrs.indexOf(1975);
-  const series = [["PAY", "Payloads", "#5ee1a8"], ["R/B", "Rocket bodies", "#c792ea"], ["DEB", "Debris", "#ff5c7a"]];
+  const series = [["PAY", "Payloads", "#8fb996"], ["R/B", "Rocket bodies", "#c9a34e"], ["DEB", "Debris", "#e2603a"]];
   makeChart($("#ch-growth"), {
     type: "line",
     data: { labels: yrs.slice(from), datasets: series.map(([k, l, c]) => ({ label: l, data: s.growth[k].slice(from), borderColor: c, backgroundColor: c + "55", fill: true, pointRadius: 0, borderWidth: 1.2 })) },
