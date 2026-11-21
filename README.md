@@ -27,7 +27,11 @@ Venue Wi-Fi can block APIs, and providers can rate-limit. Before the demo, open 
 python3 scripts/snapshot.py --warm
 ```
 
-This freezes every feed into `data/snapshots/`. If a source is unreachable during the demo, the server serves the last good copy and the UI marks it with a `stale` or `snapshot` badge.
+This freezes every feed into `data/snapshots/`. If CelesTrak is blocking your laptop, refresh the snapshots from the live site instead (it fetches one endpoint at a time):
+
+```bash
+python3 scripts/pull_snapshots.py https://astramk1.vercel.app
+``` If a source is unreachable during the demo, the server serves the last good copy and the UI marks it with a `stale` or `snapshot` badge.
 
 ## Design: "Flight Ops"
 
