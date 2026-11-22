@@ -35,6 +35,7 @@ python3 scripts/pull_snapshots.py https://astramk1.vercel.app
 
 ## Design: "Flight Ops"
 
+
 - **Hero:** a live, ray-traced orbital sunrise over India (WebGL shader, no libraries): day and night Earth textures with city lights, limb atmosphere, the sun breaking over the edge, a lens streak, procedural clouds and a twinkling starfield. It pauses when off-screen and respects reduced-motion settings.
 - **Type:** Archivo Expanded for headlines (inspired by launch-vehicle livery), Archivo for text, JetBrains Mono for numbers only. All self-hosted (SIL OFL).
 - **Colour:** graphite surfaces with a single ISRO-saffron signal colour; mint, gold and red are used only to signal safety levels.
