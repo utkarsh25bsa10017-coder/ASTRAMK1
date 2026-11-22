@@ -1,0 +1,71 @@
+1
+00:00:08,700 --> 00:00:12,400
+ASTRA is one live dashboard for disasters, space safety and navigation over India.
+
+2
+00:00:12,500 --> 00:00:16,200
+Built entirely on public data: ISRO, NDMA, IMD and the global space catalogue.
+
+3
+00:00:16,800 --> 00:00:20,300
+Official alerts from IMD, CWC and state authorities, mapped within minutes.
+
+4
+00:00:20,500 --> 00:00:24,300
+Select one for the rain, river and wave forecast at that exact spot.
+
+5
+00:00:24,600 --> 00:00:28,200
+Earthquakes, cyclone tracks and radar flood maps that see through cloud.
+
+6
+00:00:28,900 --> 00:00:31,600
+Pick any place in India. Kedarnath, for example.
+
+7
+00:00:31,800 --> 00:00:34,900
+ASTRA rates its flood risk for the next 72 hours, and for a heavy-monsoon storm,
+
+8
+00:00:35,000 --> 00:00:37,800
+plus long-term earthquake exposure, all in seconds.
+
+9
+00:00:38,400 --> 00:00:42,800
+Above us, more than 28,000 tracked objects share the sky with India's satellites.
+
+10
+00:00:43,100 --> 00:00:46,700
+ASTRA screens every close approach predicted this week,
+
+11
+00:00:46,900 --> 00:00:50,800
+each one ranked by miss distance, speed and collision odds.
+
+12
+00:00:51,400 --> 00:00:54,900
+When disaster strikes: which Indian satellites pass overhead in the next 24 hours?
+
+13
+00:00:55,100 --> 00:00:59,200
+ASTRA lists them, checks each one is safe, and says what each can see.
+
+14
+00:00:59,700 --> 00:01:03,300
+NavIC, India's own navigation constellation, tracked live.
+
+15
+00:01:03,600 --> 00:01:07,200
+Positioning quality on the ground, computed from the live orbits.
+
+16
+00:01:07,500 --> 00:01:11,200
+When towers fall, an alert is packed into a NavIC message and relayed from orbit.
+
+17
+00:01:11,700 --> 00:01:14,500
+Every number traces back to a public source,
+
+18
+00:01:14,700 --> 00:01:17,400
+and the site labels plainly what is live and what is illustrative.
