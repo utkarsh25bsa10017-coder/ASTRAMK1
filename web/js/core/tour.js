@@ -33,7 +33,7 @@ let box = null, idx = 0;
 
 function render() {
   const s = STEPS[idx];
-  box.innerHTML = `<div class="step">Guided demo · step ${idx + 1} of ${STEPS.length}</div>
+  box.innerHTML = `<div class="tour-n">Guided demo · step ${idx + 1} of ${STEPS.length}</div>
     <h4>${s.title}</h4><p>${s.text}</p>
     <div class="row"><div class="dots">${STEPS.map((_, i) => `<i class="${i === idx ? "on" : ""}"></i>`).join("")}</div>
       <div style="display:flex;gap:6px">

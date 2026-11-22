@@ -111,3 +111,6 @@ onProvenance(() => {
   pill.className = "pill " + (bad ? "warn" : "ok");
   pill.title = Object.entries(provenance).map(([k, v]) => `${v.padEnd(8)} ${k}`).join("\n");
 });
+
+// Illustrations: SMIL motion ignores the CSS reduced-motion rule, so pause it explicitly
+if (matchMedia("(prefers-reduced-motion: reduce)").matches) $$(".hero-art svg").forEach(s => s.pauseAnimations?.());

@@ -166,7 +166,8 @@
     <!-- ============ FLEET READINESS ============ -->
     <section id="view-fleet" class="view" data-view="fleet">
       <div class="page">
-        <section class="hero" style="padding-bottom:20px">
+        <section class="hero split-hero" style="padding-bottom:20px">
+          <div>
           <p class="kicker signal">Fleet readiness</p>
           <h1>Who can help here,<br><em>and are they safe?</em></h1>
           <p class="lede">Pick a live alert or any place. ASTRA lists the Indian satellites that pass over it in the next 24 hours, checks each against this week's close approaches, and reports NavIC positioning quality on the ground.</p>
@@ -174,6 +175,38 @@
             <select id="fl-alert" aria-label="Choose an alert" style="flex:1;min-width:260px"><option>Loading alerts…</option></select>
             <button class="btn" id="fl-go">Check fleet</button>
           </div>
+          </div>
+        <figure class="hero-art" aria-hidden="true">
+          <svg viewBox="0 0 460 300" fill="none">
+            <defs>
+              <radialGradient id="fl-earth" cx="230" cy="560" r="340" gradientUnits="userSpaceOnUse"><stop offset=".8" stop-color="#1c232c"/><stop offset="1" stop-color="#2c3a48"/></radialGradient>
+              <path id="fl-t1" d="M-10 205 Q230 30 470 190"/>
+              <path id="fl-t2" d="M-10 150 Q230 110 470 232"/>
+              <path id="fl-t3" d="M-10 238 Q205 70 470 118"/>
+            </defs>
+            <circle cx="230" cy="560" r="348" stroke="rgba(130,177,224,.1)" stroke-width="10"/>
+            <circle cx="230" cy="560" r="340" fill="url(#fl-earth)" stroke="rgba(130,177,224,.4)" stroke-width="1.2"/>
+            <g stroke="rgba(255,255,255,.17)" stroke-dasharray="2 4"><use href="#fl-t1"/><use href="#fl-t2"/><use href="#fl-t3"/></g>
+            <g id="fl-sat"><rect x="-3" y="-2.5" width="6" height="5" rx="1"/><rect x="-11" y="-1.4" width="6" height="2.8" opacity=".6"/><rect x="5" y="-1.4" width="6" height="2.8" opacity=".6"/></g>
+            <use href="#fl-sat" fill="#82b1e0"><animateMotion dur="11s" repeatCount="indefinite"><mpath href="#fl-t1"/></animateMotion></use>
+            <use href="#fl-sat" fill="#6cc59a"><animateMotion dur="14s" begin="-5s" repeatCount="indefinite"><mpath href="#fl-t2"/></animateMotion></use>
+            <use href="#fl-sat" fill="#e3b85a"><animateMotion dur="17s" begin="-9s" repeatCount="indefinite"><mpath href="#fl-t3"/></animateMotion></use>
+            <circle cx="120" cy="140" r="9" stroke="#ef6a5e" stroke-opacity=".75" stroke-dasharray="3 3"/>
+            <circle cx="126" cy="134" r="1.6" fill="#ef6a5e"/>
+            <text class="lbl" x="88" y="164">close approach screened</text>
+            <g transform="translate(418 34)" fill="#ee8a4f"><rect x="-4" y="-3" width="8" height="6" rx="1"/><rect x="-13" y="-1.5" width="7" height="3" opacity=".6"/><rect x="6" y="-1.5" width="7" height="3" opacity=".6"/></g>
+            <line class="art-beam" x1="414" y1="40" x2="234" y2="219" stroke="#ee8a4f" stroke-opacity=".55"/>
+            <text class="lbl" x="398" y="22" text-anchor="end">NavIC message relay</text>
+            <circle class="art-ping" cx="230" cy="222" r="6" stroke="#ef6a5e"/>
+            <circle class="art-ping d2" cx="230" cy="222" r="6" stroke="#ef6a5e"/>
+            <circle cx="230" cy="222" r="3.5" fill="#ef6a5e"/>
+            <text class="lbl hi" x="244" y="242">disaster area</text>
+            <g class="lbl"><circle cx="16" cy="18" r="3.5" fill="#82b1e0"/><text x="26" y="22">radar · sees through cloud</text>
+              <circle cx="16" cy="36" r="3.5" fill="#6cc59a"/><text x="26" y="40">optical · damage extent</text>
+              <circle cx="16" cy="54" r="3.5" fill="#e3b85a"/><text x="26" y="58">weather &amp; ocean</text></g>
+          </svg>
+          <figcaption><span><b>Passes</b> next 24 h overhead</span><span><b>Safety</b> SOCRATES screening</span><span><b>Ground</b> NavIC PDOP</span></figcaption>
+        </figure>
         </section>
         <section id="fl-result" style="border-top:0;padding-top:0"></section>
       </div>
@@ -182,7 +215,8 @@
     <!-- ============ 02 SAFETY CHECK ============ -->
     <section id="view-safety" class="view" data-view="safety">
       <div class="page">
-        <section class="hero" style="padding-bottom:30px">
+        <section class="hero split-hero" style="padding-bottom:30px">
+          <div>
           <p class="kicker signal">Safety check</p>
           <h1>How safe is<br><em>this place?</em></h1>
           <p class="lede" style="margin-bottom:22px">Flood hazards for the next 72 hours and for a heavy-monsoon storm, plus long-term earthquake exposure. A screening estimate from public data, not an official assessment.</p>
@@ -195,6 +229,33 @@
             <button data-q="Kedarnath">Kedarnath</button><button data-q="Guwahati">Guwahati</button><button data-q="Kendrapara">Kendrapara</button><button data-q="Wayanad">Wayanad</button><button data-q="Patna">Patna</button><button data-q="Bengaluru">Bengaluru</button>
             <button data-here="1">Use my location</button>
           </div>
+          </div>
+        <figure class="hero-art" aria-hidden="true">
+          <svg viewBox="0 0 460 300" fill="none">
+            <defs>
+              <linearGradient id="sa-ground" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#474747"/><stop offset="1" stop-color="#232323" stop-opacity=".2"/></linearGradient>
+              <linearGradient id="sa-water" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#82b1e0" stop-opacity=".8"/><stop offset="1" stop-color="#82b1e0" stop-opacity=".2"/></linearGradient>
+            </defs>
+            <g stroke="rgba(255,255,255,.06)"><path d="M0 70 C80 50 140 80 220 60 S380 40 460 65"/><path d="M0 96 C90 76 150 105 230 86 S390 68 460 90"/><path d="M0 122 C100 102 160 130 240 112 S400 96 460 116"/></g>
+            <path d="M58 46 a14 14 0 0 1 27-5 a11 11 0 0 1 20 6 a9 9 0 0 1-2 18 h-44 a10 10 0 0 1-1-19z" fill="rgba(255,255,255,.13)"/>
+            <g class="art-rain"><line x1="66" y1="70" x2="61" y2="98"/><line x1="80" y1="72" x2="75" y2="102" style="animation-delay:-.4s"/><line x1="94" y1="70" x2="89" y2="98" style="animation-delay:-.75s"/></g>
+            <text class="lbl hi" x="114" y="58">72 h rain</text>
+            <path d="M0 252 L0 150 C30 120 55 95 80 90 C100 88 120 120 140 150 C160 180 178 205 200 214 L232 218 C246 218 258 214 272 206 C300 192 340 190 380 196 L460 200 L460 252 Z" fill="url(#sa-ground)"/>
+            <path d="M0 150 C30 120 55 95 80 90 C100 88 120 120 140 150 C160 180 178 205 200 214 L232 218 C246 218 258 214 272 206 C300 192 340 190 380 196 L460 200" stroke="rgba(255,255,255,.38)" stroke-width="1.2"/>
+            <path d="M84 96 C92 120 104 140 118 160" stroke="#82b1e0" stroke-width="1.6" stroke-linecap="round" opacity=".85"/>
+            <g fill="rgba(255,255,255,.4)"><circle cx="131" cy="150" r="2"/><circle cx="139" cy="160" r="1.6"/><circle cx="147" cy="170" r="2.2"/><circle cx="154" cy="178" r="1.4"/></g>
+            <path d="M182 206 L272 206 C258 214 246 218 232 218 L200 214 C192 211 186 208 182 206 Z" fill="url(#sa-water)"/>
+            <line class="art-flood" x1="150" y1="192" x2="330" y2="192" stroke="#82b1e0" stroke-dasharray="4 4" stroke-opacity=".75"/>
+            <text class="lbl" x="336" y="195">10-yr storm</text>
+            <line class="lead" x1="104" y1="128" x2="120" y2="114"/><text class="lbl hi" x="123" y="112">flash flood</text>
+            <line class="lead" x1="152" y1="174" x2="170" y2="158"/><text class="lbl hi" x="173" y="156">debris flow</text>
+            <line class="lead" x1="274" y1="204" x2="292" y2="174"/><text class="lbl hi" x="295" y="172">bank overflow</text>
+            <line class="lead" x1="228" y1="218" x2="228" y2="232"/><text class="lbl hi" x="196" y="244">river flood</text>
+            <polyline class="art-quake" points="0,272 150,272 158,264 164,282 170,258 176,286 182,266 188,276 194,272 460,272" stroke="#ee8a4f" stroke-width="1.4" stroke-opacity=".85"/>
+            <text class="lbl hi" x="204" y="292">earthquake shaking</text>
+          </svg>
+          <figcaption><span><b>Terrain</b> Copernicus DEM</span><span><b>Rivers</b> 40 yr GloFAS</span><span><b>Rain</b> 72 h forecast</span><span><b>Seismic</b> NCS record</span></figcaption>
+        </figure>
         </section>
         <section id="sc-result" style="border-top:0;padding-top:0">
           <div class="empty-state" style="padding-left:0">

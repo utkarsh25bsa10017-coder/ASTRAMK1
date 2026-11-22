@@ -27,8 +27,12 @@ export async function init() {
   $("#bc-send").onclick = compose;
   on("broadcast", (a) => preselect(a));
 
-  pdopMap = L.map("pdop-map", { center: [15, 82], zoom: 2, zoomControl: false, attributionControl: false, worldCopyJump: true });
-  L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}", { maxZoom: 10, attribution: "Esri" }).addTo(pdopMap);
+  // Locked to the area the PDOP grid covers: no panning into blank map, no zooming past the 3° cells
+  pdopMap = L.map("pdop-map", { attributionControl: false, zoomControl: false, maxBounds: PDOP_BOUNDS, maxBoundsViscosity: 1, minZoom: 1, maxZoom: 5 });
+  L.control.zoom({ position: "topright" }).addTo(pdopMap);
+  L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}", { maxZoom: 5, attribution: "Esri", bounds: PDOP_BOUNDS }).addTo(pdopMap);
+  pdopMap.fitBounds(PDOP_BOUNDS);
+  pdopMap.on("resize", fitPdop);
   L.rectangle([[-30, 30], [50, 130]], { color: "#c9a34e", weight: 1.5, fill: false, dashArray: "5 4" }).bindTooltip("NavIC extended service area (30°S–50°N, 30°E–130°E)").addTo(pdopMap);
 
   await loadOrbits();
@@ -39,7 +43,7 @@ export function show() {
   active = true;
   viewer = mountGlobe($("#navic-globe-slot"));
   entities.forEach(e => e.show = true);
-  setTimeout(() => pdopMap.invalidateSize(), 60);
+  setTimeout(() => { pdopMap.invalidateSize(); fitPdop(); }, 60);
   viewer.camera.flyTo({ destination: C().Cartesian3.fromDegrees(82, 12, 72_000_000), duration: 1.2 });
   viewer.clock.currentTime = C().JulianDate.now();
   viewer.clock.multiplier = 1;
@@ -185,6 +189,15 @@ function drawSky(nl, gl) {
 }
 
 // ---------------------------------------------------------------------------
+const PDOP_BOUNDS = [[-45, 10], [60, 150]];
+// Smallest zoom at which the grid still fills the whole map box
+function fitPdop() {
+  if (!pdopMap) return;
+  const z = pdopMap.getBoundsZoom(PDOP_BOUNDS, true);
+  pdopMap.setMinZoom(Math.min(z, 5));
+  if (pdopMap.getZoom() < z) pdopMap.setView([15, 82], z, { animate: false });
+}
+
 function drawPdop() {
   if (!navic.length || !pdopMap) return;
   if (pdopLayer) pdopMap.removeLayer(pdopLayer);
