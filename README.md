@@ -131,7 +131,7 @@ js/core/          api (provenance), util,              raw HTTP cache (data/cach
                   orbitmath (SGP4/DOP), globe          circuit breaker per source
 js/workers/       propagate.js (catalogue SGP4)        derived-result cache → stale → data/snapshots
                   screen.js (conjunction screening)
-```
+```,
 
 Every API response carries an `X-Astra-Provenance` header (`live`, `cache`, `stale` or `snapshot`), which the UI shows.
 
