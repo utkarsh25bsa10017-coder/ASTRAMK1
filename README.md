@@ -1,6 +1,6 @@
 # ASTRA: space for disaster response, orbital safety and NavIC connectivity
 
-ASTRA is an interactive web dashboard that combines **live disaster alerts**, **satellite radar flood mapping**, **space-debris and conjunction monitoring** and the **NavIC constellation** in one place. Every data source is free and needs no login.
+ASTRA is  an interactive web dashboard that combines **live disaster alerts**, **satellite radar flood mapping**, **space-debris and conjunction monitoring** and the **NavIC constellation** in one place. Every data source is free and needs no login.
 
 Hackathon domains covered:
 - **03 Space-based disaster management**: Disaster Watch
