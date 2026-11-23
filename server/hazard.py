@@ -241,7 +241,35 @@ def _gumbel(annual_max):
     return {"mu": mu, "beta": beta, "Q2": q(2), "Q5": q(5), "Q10": q(10), "Q20": q(20), "Q50": q(50), "Q100": q(100)}, rp
 
 
+def _nearest_river(lat, lon):
+    """GloFAS cells are ~5 km: a city on a big river often sits in a neighbouring cell. Look at the 5 x 5 cells around
+    the point (±11 km) and return the one carrying the most water, if it is a real river and within ~9 km."""
+    pts = [(round(lat * 20) / 20 + i * 0.05, round(lon * 20) / 20 + j * 0.05) for i in range(-2, 3) for j in range(-2, 3)]
+    url = ("https://flood-api.open-meteo.com/v1/flood?latitude=" + ",".join(f"{a:.3f}" for a, _ in pts) +
+           "&longitude=" + ",".join(f"{b:.3f}" for _, b in pts) + "&daily=river_discharge_mean&past_days=60&forecast_days=1")
+    raw, _ = fetch_raw("openmeteo", f"glofas_nb_{pts[12][0]:.2f}_{pts[12][1]:.2f}", url, ttl=30 * DAY, timeout=30)
+    d = json.loads(raw)
+    best = None
+    for x in (d if isinstance(d, list) else [d]):
+        v = sorted(q for q in x["daily"]["river_discharge_mean"] if q is not None)
+        if not v:
+            continue
+        med, km = v[len(v) // 2], _hav(lat, lon, x["latitude"], x["longitude"])
+        if km <= 10 and (best is None or med > best[0]):
+            best = (med, x["latitude"], x["longitude"], km)
+    return best
+
+
 def _river(lat, lon):
+    # Use the biggest river within ~9 km (if it is clearly bigger than the stream in the point's own cell)
+    rkm, qlat, qlon = 0.0, lat, lon
+    try:
+        nb = _nearest_river(lat, lon)
+        if nb and nb[0] >= 3 and nb[3] > 1:
+            qlat, qlon, rkm = round(nb[1], 3), round(nb[2], 3), nb[3]
+    except (SourceUnavailable, ValueError, KeyError):
+        pass
+    lat, lon = qlat, qlon
     # GloFAS cells are ~5 km; round so neighbouring searches share the climatology cache.
     glat, glon = round(lat * 20) / 20, round(lon * 20) / 20
     end = (_now() - timedelta(days=60)).strftime("%Y-%m-%d")
@@ -275,9 +303,14 @@ def _river(lat, lon):
     peak_ens = max(fut_max) if fut_max else peak
     peak_day = f["time"][i0 + fut.index(peak)] if fut else None
     now_q = f["river_discharge"][i0] if i0 < len(f["river_discharge"]) else None
+    # "Now" means the next 10 days: control run and ensemble mean (one outlier member 4 weeks out is not a forecast)
+    near = [v for v in f["river_discharge"][i0:i0 + 10] if v is not None]
+    near_mean = [v for v in (f.get("river_discharge_mean") or [])[i0:i0 + 10] if v is not None]
+    peak10 = max(near + near_mean, default=0)
     return {"median": median, "annualMaxMean": sum(ann) / len(ann), "years": len(ann), "thresholds": g,
+            "riverKm": round(rkm, 1), "riverLat": lat, "riverLon": lon,
             "now": now_q, "peak": peak, "peakEnsMax": peak_ens, "peakDay": peak_day,
-            "peakRP": rp(peak), "peakEnsRP": rp(peak_ens),
+            "peakRP": rp(peak), "peakEnsRP": rp(peak_ens), "peak10": peak10, "peak10RP": rp(peak10),
             "series": {"time": f["time"], "q": f["river_discharge"], "qmax": f.get("river_discharge_max"),
                        "qmean": f.get("river_discharge_mean")}}, worst(p1, p2)
 
@@ -376,10 +409,17 @@ def _score(terrain, river, rv, rain, seis):
     if river and rv:
         big = _clamp(math.log10(max(river["median"], 0.01) + 1) / 2.5)  # ~0 for a trickle, 1 for ~300 m3/s median
         T = rv["T"]
-        score = 100 * _rp_factor(T) * _exposure(rel) * (0.35 + 0.65 * big)
-        out["riverine"] = {"score": round(score),
-                           "why": f"River peak {rv['peak']:.0f} m³/s (≈{min(T, 500):.0f}-yr level; 2-yr flood ≈ {river['thresholds']['Q2']:.0f} m³/s). "
-                                  f"Site is {rel:.0f} m above the lowest ground within 9 km."}
+        rk = river.get("riverKm") or 0
+        dist_w = 1.0 if rk < 3 else 0.75 if rk < 6 else 0.5
+        score = 100 * _rp_factor(T) * _exposure(rel) * (0.35 + 0.65 * big) * _river_weight(river) * dist_w
+        if not _has_river(river):
+            why = (f"No sizeable river here: the nearest modelled stream carries about {river['median']:.1f} m³/s on a typical day, "
+                   f"too small to flood. Site is {rel:.0f} m above the lowest ground within 9 km.")
+        else:
+            why = (f"River peak {rv['peak']:.0f} m³/s (≈{min(T, 500):.0f}-yr level; 2-yr flood ≈ {river['thresholds']['Q2']:.0f} m³/s)"
+                   + (f", river about {river['riverKm']:.0f} km away" if (river.get("riverKm") or 0) >= 2 else "")
+                   + f". Site is {rel:.0f} m above the lowest ground within 9 km.")
+        out["riverine"] = {"score": round(score), "why": why}
     else:
         out["riverine"] = {"score": 0, "why": "No river discharge data for this cell."}
 
@@ -389,18 +429,21 @@ def _score(terrain, river, rv, rain, seis):
     cn = 60 + 20 * s + (4 if slope < 2 else 0)
     S = 25400 / cn - 254
     runoff = (p24 - 0.2 * S) ** 2 / (p24 + 0.8 * S) if p24 > 0.2 * S else 0.0
-    # Water collects on flat, low-lying ground; steep valley sides drain it away.
-    pond = _clamp(0.55 + 0.35 * max(0.0, -terrain["tpiN"]) + (0.25 if slope < 1.5 else 0) + (0.2 if rel < 5 else 0)
-                  - (0.25 if slope > 8 else 0), 0.3, 1.5)
-    pluvial = _clamp(runoff / 150) * pond
+    # Runoff only floods where it collects: low-lying ground and hollows. Flat ground that sits well above its
+    # surroundings (a plateau, a campus on a rise) drains away, so height above local low ground dominates.
+    pond = _clamp(_exposure(rel) + 0.35 * max(0.0, -terrain["tpiN"]) + (0.15 if slope < 1.5 and rel < 8 else 0)
+                  - (0.1 if slope > 8 else 0), 0.05, 1.4)
+    pluvial = _clamp((runoff - 25) / 150) * pond      # street drains and soakaways take roughly the first 25 mm
     overbank = 0.0
-    if river and rv and rel < 8:
+    if river and rv and rel < 8 and _has_river(river) and (river.get("riverKm") or 0) < 6:
         t = river["thresholds"]
         overbank = _clamp((rv["peak"] - t["Q2"]) / max(1, t["Q10"] - t["Q2"])) * (1 if rel < 4 else 0.6)
     score = 100 * _clamp(max(pluvial, overbank * 0.9))
+    where = ("Low-lying ground: water collects here. " if pond >= 0.75 else
+             f"Site is {rel:.0f} m above nearby low ground, so most water drains away. " if pond < 0.35 else
+             "Slightly low ground: some ponding in heavy rain. ")
     out["bank"] = {"score": round(score),
-                   "why": f"Heaviest 24 h rain {p24:.0f} mm → ≈{runoff:.0f} mm surface runoff (soil {s * 100:.0f}% saturated). "
-                          + ("Flat, low-lying ground collects water. " if pond > 1 and slope < 2 else "Low-lying ground collects water. " if pond > 1 else "")
+                   "why": f"Heaviest 24 h rain {p24:.0f} mm → ≈{runoff:.0f} mm surface runoff (soil {s * 100:.0f}% saturated). " + where
                           + ("River above its bankfull (2-yr) level. " if overbank > 0 else "")}
 
     # 3. Sediment-laden flood / debris flow: steep ground or steep surroundings + heavy, saturating rain.
@@ -432,6 +475,61 @@ def _score(terrain, river, rv, rain, seis):
     for v in out.values():
         v["level"] = _level(v["score"])
     return out
+
+
+def _has_river(river):
+    return bool(river) and river["median"] >= 3
+
+
+def _river_weight(river):
+    """0 for a trickle, 1 for a real river (typical flow of 3 m³/s or more)."""
+    return _clamp(river["median"] / 3) if river else 0.0
+
+
+def _in_ring(x, y, ring):
+    inside = False
+    j = len(ring) - 1
+    for i in range(len(ring)):
+        xi, yi = ring[i][0], ring[i][1]
+        xj, yj = ring[j][0], ring[j][1]
+        if (yi > y) != (yj > y) and x < (xj - xi) * (y - yi) / ((yj - yi) or 1e-12) + xi:
+            inside = not inside
+        j = i
+    return inside
+
+
+def _live_alerts(lat, lon):
+    """Official warnings active now within ~40 km (SACHET district alerts, GDACS/EONET events)."""
+    try:
+        import sources
+        al, _ = sources.alerts()
+    except Exception:
+        return []
+    out = []
+    for a in al.get("alerts", []):
+        if a.get("lat") is None or a.get("type") not in ("flood", "rain", "cyclone", "landslide", "wind", "tsunami"):
+            continue
+        if a.get("source") == "gdacs" and not (a.get("gdacs") or {}).get("current", True):
+            continue
+        if a["type"] == "cyclone" and a.get("source") == "eonet":     # EONET lists past track points too
+            continue
+        rings = a.get("rings") or []
+        if rings:   # SACHET gives the warned area itself: inside it, or within 10 km of its edge
+            if any(_in_ring(lon, lat, r) for r in rings):
+                d = 0
+            else:
+                d = min((_hav(lat, lon, y, x) for r in rings for x, y in r[::4]), default=9999)
+                if d > 10:
+                    continue
+        else:
+            d = _hav(lat, lon, a["lat"], a["lon"])
+            if d > (350 if a["type"] == "cyclone" else 40):
+                continue
+        if True:
+            out.append({"type": a["type"], "title": a.get("title"), "severity": a.get("severity") or 0, "km": round(d),
+                        "source": a.get("source"), "agency": a.get("agency") or a.get("source"), "inside": d == 0})
+    out.sort(key=lambda x: (-x["severity"], x["km"]))
+    return out[:6]
 
 
 LABELS = {"riverine": "River discharge flood", "bank": "Bank overflow & runoff", "sediment": "Sediment & debris flow",
@@ -476,31 +574,50 @@ def assess(lat, lon):
             raise SourceUnavailable("terrain data unavailable: " + errors.get("terrain", ""))
 
         rain_now = wx or {"max1h": 0, "max3h": 0, "max24h": 0, "past72h": 0, "saturation": 0.5}
-        rv_now = {"peak": river["peak"], "T": max(river["peakRP"], 0.7 * river["peakEnsRP"])} if river else None
+        rv_now = {"peak": river["peak10"], "T": river["peak10RP"]} if river else None
         p10 = clim["P10"] if clim else 120.0
         rain_design = {"max1h": 0.3 * p10, "max3h": 0.5 * p10, "max24h": p10, "past72h": 0.8 * p10, "saturation": 0.75}
         rv_design = {"peak": river["thresholds"]["Q20"], "T": 20} if river else None
 
         now = _score(terrain, river, rv_now, rain_now, seis)
         design = _score(terrain, river, rv_design, rain_design, seis)
-        hazards = {k: {"label": LABELS[k], "now": now[k], "design": design[k]} for k in LABELS}
+        live = _live_alerts(lat, lon)
+        # An official warning in force here sets a floor under the matching hazard right now
+        for a in live:
+            t = (a["title"] or "").lower()
+            heavy = any(w in t for w in ("heavy", "flood", "inundat", "waterlog", "cloudburst", "very heavy", "extremely"))
+            if a["severity"] < 2 or "lightning" in t and not heavy:
+                continue
+            if a["type"] == "rain" and not heavy:
+                continue
+            floor = 20 + 10 * a["severity"] + (8 if a["inside"] else 0)
+            key = {"flood": "riverine" if _has_river(river) else "bank", "rain": "bank", "cyclone": "bank",
+                   "landslide": "sediment", "tsunami": "bank"}.get(a["type"])
+            if key and now[key]["score"] < floor:
+                now[key]["score"] = floor
+                now[key]["level"] = _level(floor)
+                now[key]["why"] += (" Official warning in force for this area: " if a["inside"] else f" Official warning in force {a['km']} km away: ") + a["title"]
+        labels = dict(LABELS)
+        if not _has_river(river):
+            labels["bank"] = "Waterlogging & runoff"
+        hazards = {k: {"label": labels[k], "now": now[k], "design": design[k]} for k in LABELS}
         c_now, c_design = _combine(now), _combine(design)
-        safety = round(100 - max(c_now, 0.7 * c_design))
-        grade, label = _grade(safety)
         s_now, s_design = round(100 - c_now), round(100 - c_design)
-        dominant = max(WATER, key=lambda k: max(now[k]["score"], 0.7 * design[k]["score"]))
+        safety = s_now
+        grade, label = _grade(safety)
+        dominant = max(WATER, key=lambda k: (now[k]["score"], design[k]["score"]))
         seis_score = now["earthquake"]["score"]
         name, admin, country = res["place"] or (f"{lat}, {lon}", "", "")
         return {"lat": lat, "lon": lon, "place": {"name": name, "admin": admin, "country": country},
                 "generated": _iso(_now()), "safety": safety, "grade": grade, "label": label,
                 "safetyNow": s_now, "gradeNow": _grade(s_now)[0], "safetyDesign": s_design, "gradeDesign": _grade(s_design)[0],
-                "dominant": dominant, "hazards": hazards,
+                "dominant": dominant, "hazards": hazards, "liveAlerts": live, "hasRiver": _has_river(river),
                 "seismicExposure": {"score": seis_score, "level": _level(seis_score), "why": now["earthquake"]["why"]},
                 "disclaimer": "Screening estimate from public data. Not an official hazard assessment; follow IMD, CWC, NDMA and state advisories.", "designEvent": {"rain24h": p10, "riverQ20": rv_design["peak"] if rv_design else None,
                                                                           "rain": clim},
                 "terrain": terrain, "river": river, "weather": wx, "seismic": seis, "errors": errors,
                 "advice": _advice(now, design), "method": METHOD}, worst(*provs)
-    return cached_result(f"assess_{lat}_{lon}", 30 * MIN, build)
+    return cached_result(f"assess4_{lat}_{lon}", 30 * MIN, build)
 
 
 def _advice(now, design):
@@ -532,11 +649,11 @@ METHOD = {
     ],
     "hazards": {
         "riverine": "Forecast return period × site exposure (height above local low ground) × river size.",
-        "bank": "SCS curve-number runoff from the heaviest 24 h of rain, amplified on flat or low ground; plus overbank spill above the 2-year level.",
+        "bank": "SCS curve-number runoff from the heaviest 24 h of rain, less ~25 mm taken by drains, scaled by how low the site sits (water only collects in low ground and hollows); plus overbank spill above the 2-year level where there is a real river (typical flow ≥ 3 m³/s). Shown as 'Waterlogging & runoff' where there is no river.",
         "sediment": "Heavy, saturating rain × slope and surrounding relief (debris and mud flows, sediment-laden floods).",
         "flash": "Peak 1 h / 3 h rain intensity × catchment relief × valley-floor position × soil saturation.",
         "earthquake": "Long-term seismicity load from historical quakes near the site.",
     },
     "scenarios": "Every hazard is scored twice: for the next 72 h (live forecast) and for a design monsoon event (ERA5 1995–2024 10-year 24 h rainfall, GloFAS 20-year river flood, 75% soil saturation).",
-    "rating": "The A–E rating covers the four water hazards only: combined = highest + 0.15 × next two; safety = 100 − max(combined now, 0.7 × combined design). A ≥ 85, B ≥ 70, C ≥ 50, D ≥ 30, E below. Long-term seismic exposure is shown separately because it does not change day to day.",
+    "rating": "The A–E rating is for right now: the four water hazards over the next 72 hours, raised where an official IMD/CWC/SDMA warning is in force within 40 km. Combined = highest + 0.15 × next two; safety = 100 − combined. A ≥ 85, B ≥ 70, C ≥ 50, D ≥ 30, E below. The 1-in-10-year monsoon storm is shown alongside as an outlook, and long-term seismic exposure separately, because neither describes today.",
 }

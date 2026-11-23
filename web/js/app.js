@@ -15,11 +15,11 @@ vendorReady.then(() => {
   // Every Leaflet map: quarter-step zoom so wheel, trackpad pinch and touch pinch feel continuous
   if (window.L) L.Map.mergeOptions({ zoomSnap: 0.25, zoomDelta: 0.5, wheelPxPerZoomLevel: 110, wheelDebounceTime: 20, touchZoom: true, bounceAtZoomLimits: false });
 });
-const NEEDS_VENDOR = new Set(["safety", "disaster", "fleet", "orbital", "navic"]);   // the landing only needs Chart.js, later
+const NEEDS_VENDOR = new Set(["safety", "disaster", "fleet", "orbital", "navic", "flights", "routes"]);   // the landing only needs Chart.js, later
 
 // Three workspaces. Ground and Space are dropdowns; the button shows the page you are on.
-const GROUP = { disaster: "ground", safety: "ground", orbital: "space", fleet: "space", navic: "signal" };
-const PAGE = { disaster: "Disaster watch", safety: "Safety check", orbital: "Orbital safety", fleet: "Fleet readiness", navic: "NavIC link" };
+const GROUP = { disaster: "ground", safety: "ground", orbital: "space", fleet: "space", navic: "signal", flights: "flights", routes: "flights" };
+const PAGE = { disaster: "Disaster watch", safety: "Safety check", orbital: "Orbital safety", fleet: "Fleet readiness", navic: "NavIC link", flights: "Live radar", routes: "Route safety" };
 function syncNav(name) {
   const g = GROUP[name];
   $$(".tabs .grp").forEach(el => {
@@ -64,6 +64,8 @@ const modules = {
   fleet: () => import("./views/fleet.js"),
   orbital: () => import("./views/orbital.js"),
   navic: () => import("./views/navic.js"),
+  flights: () => import("./views/flights.js"),
+  routes: () => import("./views/routes.js"),
   gateway: () => import("./views/gateway.js"),
 };
 const loaded = {};

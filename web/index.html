@@ -29,7 +29,7 @@
         <circle cx="28.3" cy="15.2" r="2" fill="var(--saffron)"/>
       </svg>
       <span>Astra</span>
-      <small>Disaster · Orbit · NavIC</small>
+      <small>Disaster · Orbit · NavIC · Flights</small>
     </a>
     <!-- Three workspaces. Ground and Space open a menu of their pages; every old #hash link still works. -->
     <nav class="tabs" aria-label="Workspaces">
@@ -49,6 +49,13 @@
       </div>
       <div class="grp" data-grp="signal">
         <a class="grp-b" href="#navic" data-view="navic"><span class="grp-n">Signal</span><span class="grp-cur"></span></a>
+      </div>
+      <div class="grp" data-grp="flights">
+        <button class="grp-b" type="button" aria-haspopup="menu" aria-expanded="false"><span class="grp-n">Flights</span><span class="grp-cur"></span><svg class="chev" viewBox="0 0 12 12" aria-hidden="true"><path d="M3 4.5 6 7.5 9 4.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+        <div class="grp-menu" role="menu">
+          <a href="#flights" data-view="flights" role="menuitem"><b>Live radar</b><small>Every aircraft in the sky, by type, with 3D tracking</small></a>
+          <a href="#routes" data-view="routes" role="menuitem"><b>Route safety</b><small>Safety rating and delay prediction for any route</small></a>
+        </div>
       </div>
     </nav>
     <div class="topbar-right">
@@ -158,7 +165,7 @@
         </section>
         <footer class="site-foot">
           <span><b>ASTRA</b> · Team T22 Astro World · built on free public data</span>
-          <nav><a href="#disaster">Ground</a><a href="#orbital">Space</a><a href="#navic">Signal</a><a href="#gateway">Sources &amp; feed status →</a></nav>
+          <nav><a href="#disaster">Ground</a><a href="#orbital">Space</a><a href="#navic">Signal</a><a href="#flights">Flights</a><a href="#gateway">Sources &amp; feed status →</a></nav>
         </footer>
       </div>
     </section>
@@ -219,7 +226,7 @@
           <div>
           <p class="kicker signal">Safety check</p>
           <h1>How safe is<br><em>this place?</em></h1>
-          <p class="lede" style="margin-bottom:22px">Flood hazards for the next 72 hours and for a heavy-monsoon storm, plus long-term earthquake exposure. A screening estimate from public data, not an official assessment.</p>
+          <p class="lede" style="margin-bottom:22px">Rated for right now: flood hazards over the next 72 hours and any official warning in force, with a rare monsoon storm shown as an outlook and long-term earthquake exposure alongside. A screening estimate from public data, not an official assessment.</p>
           <form class="searchbar" id="sc-search" autocomplete="off" role="search">
             <input type="search" name="q" placeholder="Search a town, district or lat, lon" aria-label="Search a place">
             <button type="submit">Assess →</button>
@@ -405,6 +412,78 @@
         <select id="bc-alert" aria-label="Alert to broadcast"><option>Loading alerts…</option></select>
         <div style="margin-top:8px"><button class="btn" id="bc-send">Compose broadcast</button></div>
         <div id="bc-out"></div>
+      </aside>
+    </section>
+
+    <!-- ============ FLIGHTS · LIVE RADAR ============ -->
+    <section id="view-flights" class="view split" data-view="flights">
+      <aside class="panel left">
+        <div class="panel-h"><h2>Live flights</h2><span class="mono small muted" id="fl-count"></span></div>
+        <div class="filters">
+          <input id="fl-search" type="search" placeholder="Callsign, registration, type or hex" aria-label="Find a flight" autocomplete="off">
+          <ul class="search-results" id="fl-results"></ul>
+          <div class="quick fl-jump" id="fl-jump"><span>Jump to</span>
+            <button data-ap="DEL">Delhi</button><button data-ap="BOM">Mumbai</button><button data-ap="BLR">Bengaluru</button><button data-ap="MAA">Chennai</button><button data-ap="CCU">Kolkata</button><button data-ap="HYD">Hyderabad</button><button data-ap="IXL">Leh</button><button data-ap="DXB">Dubai</button>
+          </div>
+        </div>
+        <h3>Aircraft types · marker shapes</h3>
+        <div class="chips ac-chips" id="fl-types"></div>
+        <p class="note" style="margin-top:6px">Click a type to show only it, click more to add.</p>
+        <div class="fl-toggles">
+          <label class="toggle"><input type="checkbox" id="fl-routes"> Usual routes of flights in view</label>
+          <label class="toggle"><input type="checkbox" id="fl-ground"> Aircraft on the ground</label>
+          <label class="toggle"><input type="checkbox" id="fl-labels" checked> Callsign labels</label>
+        </div>
+        <div id="fl-routes-list"></div>
+        <p class="note">Live ADS-B from adsb.fi community receivers (aircraft type, every ~10 s) and an OpenSky overview. Between updates each aircraft is moved along its track at its ground speed.</p>
+      </aside>
+      <div class="map-wrap" id="fl-wrap">
+        <div id="fl-map" class="map"></div>
+        <div id="fl-globe" class="fl-globe" hidden></div>
+        <div class="globe-tools glass fl-tools">
+          <div class="seg" id="fl-dim" role="group" aria-label="Map or 3D"><button data-dim="2d" class="active">Map</button><button data-dim="3d">3D</button></div>
+          <div class="seg" id="fl-cam" role="group" aria-label="3D camera" hidden><button data-cam="chase" class="active" title="Behind the aircraft, turning with it">Chase</button><button data-cam="orbit" title="Follow, north up">Orbit</button><button data-cam="route" title="Whole route">Route</button><button data-cam="free" title="Free camera">Free</button></div>
+          <button class="icon-btn wide" id="fl-panels" title="Show or hide the side panels (P)" aria-pressed="false">Hide panels</button>
+        </div>
+        <div class="fl-hover" id="fl-hover" hidden></div>
+        <div class="legend key" id="fl-legend" aria-label="Map key"></div>
+        <div class="globe-status" id="fl-status">Loading live aircraft…</div>
+      </div>
+      <aside class="panel right" id="fl-panel">
+        <div class="empty-state" id="fl-empty">
+          <h3>Flight</h3>
+          <p class="serif">Click any aircraft.</p>
+          <p>You'll get its route and the usual path between the airports, the track it has flown coloured by altitude, a predicted arrival time and delay, and a safety rating for the route.</p>
+          <p>Press <b>Track in 3D</b> to ride along behind a 3D model of the aircraft at its real altitude.</p>
+          <p class="note">Each aircraft type has its own marker shape: jumbo jets, twin-aisle and single-aisle jets, regional jets, turboprops, business jets, light aircraft, helicopters and military types. Colour shows altitude.</p>
+        </div>
+        <div id="fl-detail" hidden></div>
+      </aside>
+    </section>
+
+    <!-- ============ FLIGHTS · ROUTE SAFETY ============ -->
+    <section id="view-routes" class="view split" data-view="routes">
+      <aside class="panel left">
+        <div class="panel-h"><h2>Route safety</h2></div>
+        <p class="muted small" style="margin-top:-6px">Rate a flight route for storms, turbulence, terrain, cyclones, volcanic ash and space weather, and predict its delay.</p>
+        <form id="rt-form" class="rt-form" autocomplete="off">
+          <label class="rt-f"><span>From</span><input id="rt-from" type="search" placeholder="DEL or Delhi" aria-label="Departure airport"><ul class="suggest" id="rt-from-s"></ul></label>
+          <button type="button" class="icon-btn rt-swap" id="rt-swap" title="Swap airports" aria-label="Swap airports">⇅</button>
+          <label class="rt-f"><span>To</span><input id="rt-to" type="search" placeholder="BOM or Mumbai" aria-label="Arrival airport"><ul class="suggest" id="rt-to-s"></ul></label>
+          <label class="rt-f"><span>Departure</span><select id="rt-dep" aria-label="Departure time">
+            <option value="0">Now</option><option value="3">In 3 hours</option><option value="6">In 6 hours</option><option value="12">In 12 hours</option><option value="24">Tomorrow, same time</option><option value="48">In 2 days</option>
+          </select></label>
+          <button class="btn" type="submit">Rate this route</button>
+        </form>
+        <h3>Popular and tricky routes</h3>
+        <ul class="rt-pop" id="rt-pop"></ul>
+      </aside>
+      <div class="map-wrap">
+        <div id="rmap" class="map"></div>
+        <div class="legend key" id="rt-legend" aria-label="Map key"></div>
+      </div>
+      <aside class="panel right" id="rt-out">
+        <div class="empty-state"><h3>Route safety</h3><p class="serif">Pick two airports.</p></div>
       </aside>
     </section>
 

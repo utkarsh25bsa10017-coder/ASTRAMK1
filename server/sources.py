@@ -80,6 +80,18 @@ REGISTRY = [
     ("swpc", "NOAA SWPC space weather", "NOAA Space Weather Prediction Center", "Space",
      "Planetary Kp index, Kp forecast and F10.7 solar flux (drives atmospheric drag)",
      "https://services.swpc.noaa.gov/products/noaa-planetary-k-index.json", "Public domain"),
+    ("adsbfi", "adsb.fi open data", "adsb.fi community ADS-B network", "Flights",
+     "Live aircraft positions with ICAO type codes, 250 NM around each map cell (1 request/s)",
+     "https://opendata.adsb.fi/api/v2/lat/28.5/lon/77.1/dist/50", "Free, non-commercial"),
+    ("opensky", "OpenSky Network", "OpenSky Network (research network)", "Flights",
+     "Wide-area overview of aircraft over South Asia and the track flown so far by a selected aircraft",
+     "https://opensky-network.org/api/states/all?lamin=28&lomin=76&lamax=29&lomax=78", "Free for research/non-commercial"),
+    ("adsbdb", "adsbdb", "adsbdb.com (open aircraft + route database)", "Flights",
+     "Flight number to origin/destination airports, aircraft registry and photos",
+     "https://api.adsbdb.com/v0/callsign/IGO2133", "Free"),
+    ("ourairports", "OurAirports", "OurAirports (D. Megginson)", "Flights",
+     "Airport positions, elevations and runway headings (crosswind model), snapshot in the repo",
+     "https://davidmegginson.github.io/ourairports-data/airports.csv", "Public domain"),
 ]
 
 

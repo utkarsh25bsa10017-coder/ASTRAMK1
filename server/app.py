@@ -23,6 +23,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import gateway  # noqa: E402
 import sources  # noqa: E402
 import hazard  # noqa: E402
+import flights  # noqa: E402
 
 WEB_DIR = gateway.ROOT / "web"
 
@@ -36,7 +37,8 @@ CACHE_PREFIX = {"sachet_": "sachet", "gdacs_": "gdacs", "usgs_": "usgs", "eonet_
                 "ibtracs_": "ibtracs", "s1_": "planetary", "satcat_": "satcat", "socrates_": "socrates",
                 "gp_": "celestrak", "tlebak_": "tle-backup", "satnogs_": "satnogs", "swpc_": "swpc",
                 "ncs_": "ncs", "emsc_": "emsc", "geo_": "geocode", "rev_": "geocode", "elev_": "openmeteo",
-                "glofas_": "openmeteo", "hz_wx_": "openmeteo"}
+                "glofas_": "openmeteo", "hz_wx_": "openmeteo", "fl_wx_": "openmeteo",
+                "flt_fi_": "adsbfi", "flt_os_": "opensky", "os_track_": "opensky", "adsbdb_": "adsbdb"}
 
 
 def _health_with_cache():
@@ -60,7 +62,9 @@ def _health_with_cache():
 EDGE_TTL = [("/api/health", 0), ("/api/gateway", 0), ("/api/alerts", 120), ("/api/earthquakes", 300),
             ("/api/conjunctions", 1800), ("/api/catalog/", 7200), ("/api/orbits/", 7200), ("/api/spaceweather", 900),
             ("/api/cyclones", 3600), ("/api/flood/", 86400), ("/api/geocode", 86400), ("/api/assess", 1800),
-            ("/api/weather", 1800), ("/api/gdacs/", 3600)]
+            ("/api/weather", 1800), ("/api/gdacs/", 3600),
+            ("/api/flights/cell", 8), ("/api/flights/wide", 180), ("/api/flights/info", 30), ("/api/flights/routes", 3600),
+            ("/api/flights/assess", 300), ("/api/flights/airports", 86400)]
 
 
 def edge_cache(path: str, code: int, prov: str) -> str:
@@ -108,6 +112,19 @@ def route(path: str, qs: dict):
         return hazard.geocode(_q(qs, "q", ""))
     if p == "/api/assess":
         return hazard.assess(_q(qs, "lat"), _q(qs, "lon"))
+    if p == "/api/flights/airports":
+        return flights.airports()
+    if p == "/api/flights/cell":
+        return flights.cell(_q(qs, "lat"), _q(qs, "lon"))
+    if p == "/api/flights/wide":
+        return flights.wide()
+    if p == "/api/flights/info":
+        return flights.info(_q(qs, "hex", ""), _q(qs, "cs", ""))
+    if p == "/api/flights/routes":
+        return flights.routes(_q(qs, "cs", ""))
+    if p == "/api/flights/assess":
+        return flights.assess(_q(qs, "from"), _q(qs, "to"), _q(qs, "dep"), _q(qs, "hex"), _q(qs, "lat"), _q(qs, "lon"),
+                              _q(qs, "alt"), _q(qs, "gs"), _q(qs, "start"))
     if p == "/api/gateway":
         return {"sources": sources.registry(), "health": _health_with_cache()}, "live"
     raise KeyError(p)

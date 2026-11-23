@@ -1,6 +1,6 @@
 import { api } from "../core/api.js";
 import { attachSearch, goSafety } from "../core/search.js";
-import { $, esc, fmtNum, fmtIST, timeAgo, toast, makeChart, PAL, riskColor, gradeColor } from "../core/util.js";
+import { $, esc, fmtNum, fmtIST, timeAgo, toast, makeChart, PAL, riskColor, gradeColor, TYPE_ICON } from "../core/util.js";
 import { waitCard } from "../core/loader.js";
 import { getFocus, setFocus } from "../core/focus.js";
 
@@ -92,15 +92,24 @@ function scale(now, design, single) {
 
 const LEVEL = (s) => s >= 75 ? "Very high" : s >= 55 ? "High" : s >= 35 ? "Moderate" : s >= 15 ? "Low" : "Very low";
 
+function maxDesignLabel(d) {
+  const k = ORDER.reduce((a, b) => (d.hazards[b].design.score > d.hazards[a].design.score ? b : a));
+  return d.hazards[k].label;
+}
+const TYPE_TAG = (t) => TYPE_ICON[t] || TYPE_ICON.other;
+
 function render(d, nameHint) {
   const out = $("#sc-result");
   const t = d.terrain, r = d.river, w = d.weather, s = d.seismic;
   const place = nameHint && !/^-?\d/.test(nameHint) ? nameHint : (d.place.name || `${d.lat}, ${d.lon}`);
   const dom = d.hazards[d.dominant];
   const domNow = dom.now.score, domDesign = dom.design.score;
-  const summary = d.safety >= 85
-    ? `No hazard stands out, either over the next 72 hours or in a heavy-monsoon event.`
-    : `The main concern is <b>${dom.label.toLowerCase()}</b>: ${LEVEL(domNow).toLowerCase()} now (${domNow}/100) and ${LEVEL(domDesign).toLowerCase()} in a 1-in-10-year monsoon storm (${domDesign}/100).`;
+  const live = d.liveAlerts || [];
+  const rain72 = w ? `${fmtNum(w.next72h)} mm of rain forecast in the next 72 hours` : "no rain forecast available";
+  const outlook = d.safetyDesign < 50 ? ` In a rare 1-in-10-year monsoon storm this place would rate ${d.gradeDesign} (${d.safetyDesign}), mainly from ${esc(maxDesignLabel(d).toLowerCase())}.` : "";
+  const summary = (d.safety >= 85
+    ? `Nothing to worry about right now: ${rain72}${live.length ? "" : " and no official warning in force here"}.`
+    : `Right now the main concern is <b>${dom.label.toLowerCase()}</b>: ${LEVEL(domNow).toLowerCase()} (${domNow}/100), with ${rain72}.`) + outlook;
 
   out.innerHTML = `
     <div class="place-h">
@@ -117,12 +126,13 @@ function render(d, nameHint) {
             <p>${summary}</p>
             <p class="disclaimer">${esc(d.disclaimer || "Screening estimate from public data. Not an official hazard assessment.")}</p>
             <div class="sub-ratings">
-              <div><b style="color:${gradeColor(d.gradeNow)}">${d.safetyNow}<span style="font-size:14px;color:var(--text-3)"> ${d.gradeNow}</span></b><span>Next 72 hours</span></div>
-              <div><b style="color:${gradeColor(d.gradeDesign)}">${d.safetyDesign}<span style="font-size:14px;color:var(--text-3)"> ${d.gradeDesign}</span></b><span>Heavy-monsoon storm (1 in 10 yr)</span></div>
+              <div><b style="color:${gradeColor(d.gradeNow)}">${d.safetyNow}<span style="font-size:14px;color:var(--text-3)"> ${d.gradeNow}</span></b><span>Right now · next 72 h (the rating)</span></div>
+              <div><b style="color:${gradeColor(d.gradeDesign)}">${d.safetyDesign}<span style="font-size:14px;color:var(--text-3)"> ${d.gradeDesign}</span></b><span>Outlook: rare monsoon storm (1 in 10 yr)</span></div>
             </div>
           </div>
         </div>
-        <h3 style="margin-top:28px">Flood hazards, 0 to 100 (these make the rating)</h3>
+        ${live.length ? `<div class="live-warn"><h3 style="margin:0 0 6px">Official warnings in force here</h3>${live.map(a => `<p>${TYPE_TAG(a.type)} <b>${esc(a.title)}</b> <span class="muted small">${a.inside ? "covers this place" : a.km + " km away"} · ${esc(a.agency || a.source)}</span></p>`).join("")}</div>` : ""}
+        <h3 style="margin-top:28px">Flood hazards, 0 to 100 (the solid bar makes the rating)</h3>
         <div class="hz-legend"><span><i></i>now · next 72 h (live forecast)</span><span><i class="d"></i>design event · ${fmtNum(d.designEvent.rain24h)} mm in 24 h, 20-yr river flood</span></div>
         ${ORDER.map(k => {
           const h = d.hazards[k];
